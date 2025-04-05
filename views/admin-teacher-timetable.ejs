@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>All Teacher Timetables</title>
+    <style>
+        table {
+            width: 85%;
+            border-collapse: collapse;
+            text-align: center;
+            margin: 20px auto;
+        }
+        th, td {
+            border: 1px solid black; 
+            text-align: center; 
+            vertical-align: middle; /* Align content to the middle */
+            padding: 10px; /* Add spacing inside cells */
+            min-width: 120px; /* Ensure consistent column width */
+            height: 50px; /* Set a minimum height for rows */
+            word-wrap: break-word; /* Prevent overflow in case of long text */
+        }
+        th {
+            background-color: #f2f2f2; /* Light gray background for headers */
+            font-weight: bold;
+        }
+
+        td:empty {
+            height: 50px; /* Ensures empty cells have the same height */
+        }
+        .timetable-container {
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <a href="/ctg">Home</a>
+    <h2 style="text-align: center;">All Teacher Timetables</h2>
+
+    <% teacherTimetables.forEach(teacher => { %>
+        <div class="timetable-container">
+            <h3 style="text-align: center;"><%= teacher.teacher_name %>'s Timetable</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Time / Day</th>
+                        <th>Monday</th>
+                        <th>Tuesday</th>
+                        <th>Wednesday</th>
+                        <th>Thursday</th>
+                        <th>Friday</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% for (let period = 1; period <= 8; period++) { %>
+                        <tr>
+                            <th>Period <%= period %></th>
+                            <% ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].forEach(day => { %>
+                                <td>
+                                    <% if (teacher.timetable[period] && teacher.timetable[period][day]) { %>
+                                        <%= teacher.timetable[period][day].subject_name %><br>
+                                        <%= teacher.timetable[period][day].room_name %><br>
+                                        <%= teacher.timetable[period][day].class_name %>
+                                    <% } else { %>
+                                        -
+                                    <% } %>
+                                </td>
+                            <% }); %>
+                        </tr>
+                    <% } %>
+                </tbody>
+            </table>
+        </div>
+    <% }); %>
+</body>
+</html>

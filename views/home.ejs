@@ -1,0 +1,120 @@
+<% layout("/layouts/boilerplate.ejs") %>
+<body>
+    <div class="hero-section m-5">
+        <div class="cta">   
+            <br>
+            <h1 class="fw-bold">Automated Timetable Generator</h1>
+            <h4>Seamless Scheduling, Smarter Learning!</h4>
+            <p>Effortlessly generate, manage, and optimize timetables for students and teachers.<br>
+                Sign in now and experience hassle-free academic planning!</p>
+            <form method="GET" action="/login">
+                <button type="submit" class="btn btn-info">Get Started <i class="fa-solid fa-arrow-right"></i></button>
+            </form>
+        </div>
+        <div class="image"></div>
+            <img src="/Images/cta-4.png" alt="cta_img">
+        </div>
+    </div>
+    <div class="features m-5" id="features">
+        <br>
+        <h2 class="section-title" style="text-align: center;">Our Features</h2>
+        <!-- <p style="text-align: center;">Everything you need</p> -->
+        <div class="feature-grid">
+            <div class="card">
+                <img src="/Images/auto_gen.png" class="icon" alt="auto_gen_icon">
+                <div class="card-body">
+                    <h5 class="card-title">Automated Timetable Generation</h5>
+                    <p class="card-text">Automatically schedules lectures without conflicts, ensuring efficiency.</p>
+                </div>
+            </div>
+            <div class="card">
+                <img src="/Images/role_based.png" class="icon" alt="role_based_icon">
+                <div class="card-body">
+                    <h5 class="card-title">Role-Based Access Control</h5>
+                    <p class="card-text">Different access for Admins, Teachers, and Students for secure operations.</p>
+                </div>
+            </div>
+            <div class="card">
+                <img src="/Images/timetable_view.png" class="icon" alt="timetable_view_icon">
+                <div class="card-body">
+                    <h5 class="card-title">Teacher & Student Timetable Views</h5>
+                    <p class="card-text">Personalized dashboards for teachers and students to view assigned schedules.</p>
+                </div>
+            </div>
+            <div class="card">
+                <img src="/Images/editable.png" class="icon" alt="editable_icon">
+                <div class="card-body">
+                    <h5 class="card-title">Editable & Saveable Timetables</h5>
+                    <p class="card-text">Modify and save preferred timetables without regenerating from scratch.</p>
+                </div>
+            </div>
+            <div class="card">
+                <img src="/Images/resource_alloc.png" class="icon" alt="resource_alloc_icon">
+                <div class="card-body">
+                    <h5 class="card-title">Optimized Resource Allocation</h5>
+                    <p class="card-text">Ensures efficient allocation of classrooms, labs, and faculty without clashes.</p>
+                </div>
+            </div>
+            <div class="card">
+                <img src="/Images/download.png" class="icon" alt="download_icon">
+                <div class="card-body">
+                    <h5 class="card-title">Download & Share Options</h5>
+                    <p class="card-text">Export timetables as PDFs for offline access and easy distribution.</p>
+                </div>
+            </div>
+            
+        </div>
+        <br>
+    </div>
+    <section class="how-it-works m-5">
+        <br>
+        <h2 class="section-title">How It Works</h2>
+        <p class="section-subtitle">A simple step-by-step guide to show how our system works</p>
+        <br>
+        <div class="steps-container">
+            <!-- Step 1 -->
+            <div class="step">
+                <div class="step-icon">
+                    <i class="fa fa-user-cog"></i> <!-- Admin Icon -->
+                </div>
+                <h3>Step 1</h3>
+                <h5>Admin Inputs Data</h5>
+                <p>The admin enters class, teacher, subject, and room details into the system.</p>
+            </div>
+
+            <div class="arrow">
+                <i class="fa fa-arrow-right"></i>
+            </div>
+    
+            <!-- Step 2 -->
+            <div class="step">
+                <div class="step-icon">
+                    <i class="fa fa-cogs"></i> <!-- Automation Icon -->
+                </div>
+                <h3>Step 2</h3>
+                <h5>Generates the Timetable</h5>
+                <p>System generates an optimized timetable automatically avoiding clashes.</p>
+            </div>
+
+            <div class="arrow">
+                <i class="fa fa-arrow-right"></i>
+            </div>
+    
+            <!-- Step 3 -->
+            <div class="step">
+                <div class="step-icon">
+                    <i class="fa fa-user-graduate"></i> <!-- Student Icon -->
+                </div>
+                <h3>Step 3</h3>
+                <h5>Teachers & Students Access Timetable</h5>
+                <p>Teachers & Students log in to view, download, or print their schedules.</p>
+            </div>
+        </div>
+        <br><br>
+        <form method="GET" action="/login">
+            <button type="submit" class="btn btn-dark">Generate Your First Timetable</i></button>
+        </form>
+    </section>
+    <br>
+    <br>
+</body>

@@ -1,0 +1,72 @@
+
+<% layout("/layouts/boilerplate.ejs") %>
+<body>
+    <div class="dashboard-container">
+    <!-- Sidebar Navigation -->
+    <div class="sidebar">
+        <h4 class="text-center mb-3"><i class="bi bi-person-circle"></i> Admin Panel</h4>
+        <a href="/admin/dashboard"><i class="bi bi-house-door-fill"></i> Dashboard</a>
+        <a href="/admin/users"><i class="bi bi-people"></i> User Details</a>
+        <a href="/class"><i class="bi bi-building"></i> Class Details</a>
+        <a href="/room"><i class="bi bi-door-closed"></i> Room Details</a>
+        <a href="/subject"><i class="bi bi-book"></i> Subject Details</a>
+        <a href="/teacher"><i class="bi bi-person-badge"></i> Teacher Details</a>
+        <a href="/timing"><i class="bi bi-clock"></i> Timing Details</a>
+        <a href="/timetable"><i class="bi bi-calendar-check"></i> Generate Timetable</a>
+        <a href="/timetable/saved"><i class="bi bi-save2"></i> Saved Timetable</a>
+        <a href="#"><i class="bi bi-gear"></i> Profile & Settings</a>
+        <a href="/logout"><i class="bi bi-box-arrow-right"></i> Logout</a>
+    </div>
+
+    <!-- Main Content -->
+    <div class="content">
+        <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm p-3" style="height: 3rem;">
+            <div class="container-fluid">
+                <h3 class="fw-bold">Dashboard</h3>
+            </div>
+        </nav>
+
+        <!-- Dashboard Cards -->
+        <div class="row mt-4">
+            <div class="col-md-4">
+                <div class="card ">
+                    <div class="card-body">
+                        <h5 class="card-title">Total Classes</h5>
+                        <p class="card-text">View & manage class details.</p>
+                        <a href="/class" class="btn btn-info">View Details</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card ">
+                    <div class="card-body">
+                        <h5 class="card-title">Total Teachers</h5>
+                        <p class="card-text">View & manage teacher details.</p>
+                        <a href="/teacher" class="btn btn-info">View Details</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card ">
+                    <div class="card-body">
+                        <h5 class="card-title">Saved Timetables</h5>
+                        <p class="card-text">Access previously generated timetables.</p>
+                        <a href="/timetable/saved" class="btn btn-info">View Timetables</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Generate Timetable Button -->
+        <div class="mt-4">
+            <form method="GET" action="/timetable">
+                <button class="btn btn-danger btn-lg"><i class="bi bi-calendar-check"></i> Generate Timetable</button>
+            </form>
+        </div>
+
+    </div>
+    </div>
+</body>
+

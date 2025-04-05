@@ -1,0 +1,77 @@
+
+<% layout("/layouts/boilerplate.ejs") %>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar Navigation -->
+        <div class="sidebar">
+            <h4 class="text-center mb-3"><i class="bi bi-person-circle"></i> Admin Panel</h4>
+            <!-- <a href="/admin/dashboard" class="fw-bold" style="font-size: 20px;"> Dashboard</a> -->
+            <a href="/admin/dashboard"><i class="bi bi-house-door-fill"></i> Dashboard</a>
+            <a href="/admin/users"><i class="bi bi-people"></i> User Details</a>
+            <a href="/class"><i class="bi bi-building"></i> Class Details</a>
+            <a href="/room"><i class="bi bi-door-closed"></i> Room Details</a>
+            <a href="/subject"><i class="bi bi-book"></i> Subject Details</a>
+            <a href="/teacher"><i class="bi bi-person-badge"></i> Teacher Details</a>
+            <a href="/timing"><i class="bi bi-clock"></i> Timing Details</a>
+            <a href="/timetable"><i class="bi bi-calendar-check"></i> Generate Timetable</a>
+            <a href="/timetable/saved"><i class="bi bi-save2"></i> Saved Timetable</a>
+            <a href="#"><i class="bi bi-gear"></i> Profile & Settings</a>
+            <a href="/logout"><i class="bi bi-box-arrow-right"></i> Logout</a>
+        </div>
+    
+        <!-- Main Content -->
+        <div class="content">
+            <h1>Timing Details</h1>
+        <p>Manage period and break timings for the timetable.</p>
+
+        <!-- Timing Form -->
+        <form id="timingForm" method="POST" action="/timing" class="border p-4 rounded shadow-sm bg-light">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label"><i class="bi bi-clock"></i> Period 1</label>
+                    <input type="text" class="form-control" name="period1" value="<%= periodTimings[0] %>" required>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label"><i class="bi bi-clock"></i> Period 2</label>
+                    <input type="text" class="form-control" name="period2" value="<%= periodTimings[1] %>" required>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label"><i class="bi bi-cup"></i> Break</label>
+                    <input type="text" class="form-control" name="break1" value="<%= periodTimings[2] %>" required>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label"><i class="bi bi-clock"></i> Period 3</label>
+                    <input type="text" class="form-control" name="period3" value="<%= periodTimings[3] %>" required>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label"><i class="bi bi-clock"></i> Period 4</label>
+                    <input type="text" class="form-control" name="period4" value="<%= periodTimings[4] %>" required>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label"><i class="bi bi-cup"></i> Break</label>
+                    <input type="text" class="form-control" name="break2" value="<%= periodTimings[5] %>" required>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label"><i class="bi bi-clock"></i> Period 5</label>
+                    <input type="text" class="form-control" name="period5" value="<%= periodTimings[6] %>" required>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label"><i class="bi bi-clock"></i> Period 6</label>
+                    <input type="text" class="form-control" name="period6" value="<%= periodTimings[7] %>" required>
+                </div>
+            </div>
+
+            <div class="mt-4">
+                <button type="submit" class="btn btn-success"><i class="bi bi-check-circle"></i> Save Timings</button>
+            </div>
+        </form>
+    </div>
+</div>
+    </body>

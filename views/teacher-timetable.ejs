@@ -1,0 +1,170 @@
+
+<% layout("/layouts/boilerplate.ejs") %>
+<style>
+    table {
+        width: 85%;
+        text-align: center;
+        margin: 20px auto;
+    }
+    th, td {
+        border: 1px solid black; 
+        text-align: center; 
+        vertical-align: middle;
+        padding: 10px; 
+        min-width: 120px;
+        height: 50px;
+        word-wrap: break-word;
+    }
+    th {
+        background-color: #f2f2f2;
+        font-weight: bold;
+    }
+    .timetable-container {
+        margin-bottom: 30px;
+    }
+    .center-button {
+        text-align: center;
+        margin-top: 20px;
+    }
+</style>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar Navigation -->
+        <div class="sidebar">
+            <h4 class="text-center fw-bold mb-3"><i class="bi bi-person-circle"></i> Teacher Panel</h4>
+            <a href="/teacher/dashboard"><i class="bi bi-house-door-fill"></i> Dashboard</a>
+            <a href="/teacher-timetable"><i class="bi bi-calendar-check"></i> View My Timetable</a>
+            <a href="#"><i class="bi bi-gear"></i> Profile & Settings</a>
+            <a href="/logout"><i class="bi bi-box-arrow-right"></i> Logout</a>
+        </div>
+
+        <!-- Main Content -->
+        <div class="content">
+            
+            <h2 class="text-center mb-4" style="color: black;"><i class="bi bi-calendar"></i> Teacher Timetable</h2>
+
+            <% for (let teacher in teacherTimetable) { %>
+                <div id="timetable_<%= teacher.replace(/\s+/g, '_') %>" class="timetable-container border rounded p-3 mb-4 shadow-sm bg-light">
+                <!-- <div id="timetable_<%= teacher.replace(/\s+/g, '_') %>" class="timetable-container"> -->
+                    <h3 style="text-align: center;"><%= teacher %> Timetable</h3>
+                    <table >
+                        <thead>
+                            <tr>
+                                <th>Period / Day</th>
+                                <th>Monday</th>
+                                <th>Tuesday</th>
+                                <th>Wednesday</th>
+                                <th>Thursday</th>
+                                <th>Friday</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% count=0 %>
+                            <% for (let pd = 1; pd <= periodTimings.length; pd++) { %>
+                                <% let period = pd-count %>
+                                <tr>
+                                    <% if (periodTimings[pd-1].includes("Break")) { %>
+                                        <% count++ %>
+                                        
+                                        <th colspan="6" style="text-align: center; background-color: lightgray;"><%= periodTimings[pd-1] %></th>
+                                    <% } else { %>
+                                        <th><%= periodTimings[pd-1] %></th>
+                                        <% ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].forEach(day => { %>
+                                            <td>
+                                                <% if (teacherTimetable[teacher][day]) { %> 
+                                                    <% teacherTimetable[teacher][day].forEach(lecture => { %>
+                                                        <% if (lecture.period == period) { %>
+                                                            <strong><%= lecture.subject %></strong><br>
+                                                            Class: <%= lecture.class %><br>
+                                                            Room: <%= lecture.room %>
+                                                        <% } %>
+                                                    <% }) %>
+                                                <% } else { %>
+                                                    -
+                                                <% } %>
+                                            </td>
+                                        <% }); %>
+                                    <% } %>
+                                </tr>
+                            <% } %>
+                        </tbody>
+                    </table>
+                    <div class="text-center">
+                        <button class="btn btn-success" onclick="downloadPDF('<%= teacher.replace(/\s+/g, '_') %>')">
+                            <i class="bi bi-file-earmark-pdf"></i> Download PDF
+                        </button>
+                    </div>
+                <!-- </div> -->
+                </div>
+            <% } %>
+            
+        </div>
+    </div>
+    <script>
+        const teacherTimetable = <%- JSON.stringify(teacherTimetable) %>;
+        const periodTimings = <%- JSON.stringify(periodTimings) %>;
+
+
+        function downloadPDF(identifier) {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({
+                orientation: "landscape",
+                unit: "mm",
+                format: "a4"
+            });
+
+            let isTeacher = !!teacherTimetable[identifier]; 
+            let timetableData = isTeacher ? teacherTimetable[identifier] : timetableByClass[identifier]?.timetable;
+            
+            if (!timetableData) {
+                alert("Error: Timetable data not found!");
+                return;
+            }
+
+            let title = isTeacher ? `Timetable for ${identifier.toUpperCase()}` : `Timetable for ${timetableByClass[identifier]?.class_name}`;
+            doc.setFontSize(18);
+            doc.text(title, 140, 15, { align: "center" });
+
+            let headers = ["Time / Day", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+            let tableData = [];
+            let count = 0;
+
+            periodTimings.forEach((time, index) => {
+                if (time.includes("Break")) {
+                    count++;
+                    tableData.push([{ content: time, colSpan: 6, styles: { halign: "center", fillColor: [200, 200, 200] } }]);
+                } else {
+                    let period = index + 1 - count;
+                    let row = [time];
+
+                    ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].forEach(day => {
+                        if (timetableData[day]) {
+                            let lecture = isTeacher 
+                                ? timetableData[day].find(l => Number(l.period) === period)
+                                : timetableData[period]?.[day];
+
+                            row.push(lecture ? `${lecture.subject || lecture.subject_name}\nClass: ${lecture.class || lecture.teacher_name}\nRoom: ${lecture.room || lecture.room_name}` : "-");
+                        } else {
+                            row.push("-");
+                        }
+                    });
+
+                    tableData.push(row);
+                }
+            });
+
+            doc.autoTable({
+                head: [headers],
+                body: tableData,
+                startY: 25,
+                theme: "grid",
+                styles: { fontSize: 10, cellPadding: 4, valign: "middle" },
+                headStyles: { fillColor: [100, 150, 255] },
+                alternateRowStyles: { fillColor: [240, 240, 240] },
+            });
+
+            let filename = isTeacher ? `Timetable_${identifier}.pdf` : `Timetable_${timetableByClass[identifier]?.class_name}.pdf`;
+            doc.save(filename);
+        }
+    </script>
+</body>

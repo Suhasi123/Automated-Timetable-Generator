@@ -1,0 +1,74 @@
+<% layout("/layouts/boilerplate.ejs") %>
+<body>
+    <div class="login-container">  
+    
+    <div class="login-box">
+        <h2 class="fw-bold">LOGIN AS</h2>
+        <br>
+        <!-- Role Selection Buttons -->
+        <div class="role-selection">
+            <button class="role-btn admin" onclick="selectRole('admin')">ADMIN</button>
+            <button class="role-btn teacher-role" onclick="selectRole('teacher')">TEACHER</button>
+            <button class="role-btn student" onclick="selectRole('student')">STUDENT</button>
+        </div>
+        
+        <!-- Login Form -->
+        <form id="loginForm">
+            <input type="hidden" id="role" name="role" value="admin">
+
+            <div class="input-group">
+                <i class="fa-solid fa-user"></i>
+                <input type="text" id="username" name="username" placeholder="USERNAME" required>
+            </div>
+
+            <div class="input-group">
+                <i class="fa-solid fa-lock"></i>
+                <input type="password" id="password" name="password" placeholder="PASSWORD" required>
+            </div>
+            <br>
+            <button type="submit" class="btn-login" onclick="login({username, password, role})">LOGIN</button>
+        </form>
+    </div>
+</div>
+<!-- <div class="neumorphic neumorphic-card">
+    <h2>Login</h2>
+    <form action="/login" method="post">
+        <input type="text" name="username" class="neumorphic neumorphic-input" placeholder="Username" required>
+        <input type="password" name="password" class="neumorphic neumorphic-input" placeholder="Password" required>
+        <button type="submit" class="neumorphic neumorphic-button">Login</button>
+    </form> 
+</div>  -->
+
+<script>
+    function selectRole(role) {
+        document.getElementById("role").value = role;
+        document.querySelectorAll('.role-btn').forEach(btn => btn.classList.remove('selected'));
+        document.querySelector(`.${role}`).classList.add('selected');
+    }
+
+    document.getElementById("loginForm").addEventListener("submit", function (event) {
+            event.preventDefault(); // Prevent default form submission
+
+            const username = document.getElementById("username").value;
+            const password = document.getElementById("password").value;
+            const role = document.getElementById("role").value;
+
+            fetch("/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username, password, role })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.text().then(msg => {
+                    alert(msg);
+                    location.reload();
+                });
+                }
+                window.location.href = response.url; // Redirect on success
+            })
+            .catch(error => console.error("Login Error:", error));
+        });
+</script>
+    
+</body>

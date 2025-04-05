@@ -1,0 +1,70 @@
+
+<% layout("/layouts/boilerplate.ejs") %>
+<body>
+    <div class="dashboard-container">
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <!-- <h2 style="font-size: 20px; text-align: center; margin-bottom: 20px;"><i class="bi bi-person-circle"></i> Student Panel</h2> -->
+                <h4 class="text-center mb-3"><i class="bi bi-person-circle"></i> Student Panel</h4>
+                <a href="/student/dashboard"><i class="bi bi-house-door-fill"></i> Dashboard</a>
+                <a href="/student-timetable"><i class="bi bi-calendar-check"></i> View My Timetable</a>
+                <a href="#"><i class="bi bi-gear"></i> Profile & Settings</a>
+                <a href="/logout"><i class="bi bi-box-arrow-right"></i> Logout</a>
+            </div>
+    
+            <!-- Main Content -->
+            <div class="content">
+                <h1>Welcome, [Student Name]!</h1>
+                <p>Your class timetable is just a click away!</p>
+    
+                <!-- Summary Cards -->
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card">
+                            <h3><i class="bi bi-building"></i> Class</h3>
+                            <p>SY B.Tech - A</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card">
+                            <h3><i class="bi bi-calendar-week"></i> Lectures This Week</h3>
+                            <p>20 Lectures</p>
+                        </div>
+                    </div>
+                </div>
+    
+                <br>
+    
+                <!-- Quick Access Button -->
+                <form method="GET" action="/student-timetable">
+                    <button class="btn btn-primary btn-lg"><i class="bi bi-calendar-check"></i> View My Timetable</button>
+                </form>
+    
+                <br>
+    
+                <!-- Today's Subjects Overview -->
+                <h3><i class="bi bi-book"></i> Today's Subjects</h3>
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th><i class="bi bi-book"></i> Subject</th>
+                            <th><i class="bi bi-clock"></i> Period</th>
+                            <th><i class="bi bi-building"></i> Room</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Mathematics</td>
+                            <td>1st</td>
+                            <td>Room 203</td>
+                        </tr>
+                        <tr>
+                            <td>Physics</td>
+                            <td>3rd</td>
+                            <td>Lab 2</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+</body>
