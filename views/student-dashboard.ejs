@@ -14,7 +14,7 @@
     
             <!-- Main Content -->
             <div class="content">
-                <h1>Welcome, [Student Name]!</h1>
+                <h1>Welcome, <%=stu_name%>!</h1>
                 <p>Your class timetable is just a click away!</p>
     
                 <!-- Summary Cards -->
@@ -22,13 +22,13 @@
                     <div class="col-md-4">
                         <div class="card">
                             <h3><i class="bi bi-building"></i> Class</h3>
-                            <p>SY B.Tech - A</p>
+                            <b><p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<%=class_name%></p></b>
                         </div>
                     </div>
                     <div class="col-md-4">
                         <div class="card">
                             <h3><i class="bi bi-calendar-week"></i> Lectures This Week</h3>
-                            <p>20 Lectures</p>
+                            <b><p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<%=lectureCount%> Lectures</b></p>
                         </div>
                     </div>
                 </div>
@@ -43,7 +43,7 @@
                 <br>
     
                 <!-- Today's Subjects Overview -->
-                <h3><i class="bi bi-book"></i> Today's Subjects</h3>
+                <!-- <h3><i class="bi bi-book"></i> Today's Subjects</h3>
                 <table class="table table-bordered">
                     <thead>
                         <tr>
@@ -64,7 +64,7 @@
                             <td>Lab 2</td>
                         </tr>
                     </tbody>
-                </table>
+                </table> -->
             </div>
         </div>
 </body>

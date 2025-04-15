@@ -105,15 +105,25 @@ app.get("/logout", (req, res) => {
 });
 
 app.get("/admin/dashboard", authMiddleware("admin"), (req, res) => {
-    res.render("admin-dashboard.ejs");
-});
-
-app.get("/teacher/dashboard", authMiddleware("teacher"), (req, res) => {
-    res.render("teacher-dashboard.ejs");
-});
-
-app.get("/student/dashboard", authMiddleware("student"), (req, res) => {
-    res.render("student-dashboard.ejs");
+    const q1 = "SELECT count(*) FROM classes";
+    connection.query(q1, (err, result1) => {
+        if (err) {
+            console.error(" Database error:", err);
+            return res.status(500).send("Internal Server Error");
+        }
+        let classCnt = result1[0]["count(*)"];
+        let q2 = "SELECT count(*) FROM teachers;";
+        connection.query(q2, (err, result2) => {
+            if (err) {
+                console.error(err);
+                return res.send("Error fetching subjects");
+            }
+            let teacherCnt = result2[0]["count(*)"];
+            
+            res.render("admin-dashboard.ejs", { classCnt, teacherCnt});
+        });
+        
+    });
 });
 
 // app.get("/admin/users", authMiddleware("admin"), (req, res) => {
@@ -1521,6 +1531,71 @@ app.get("/admin/teacher-timetables", authMiddleware("admin"), async (req, res) =
     }
 });
 
+// app.get("/teacher/dashboard", authMiddleware("teacher"), (req, res) => {
+//     res.render("teacher-dashboard.ejs");
+// });
+
+app.get("/teacher/dashboard", authMiddleware("teacher"), (req, res) => {
+    if (!req.session.user || req.session.user.role !== "teacher") {
+        return res.status(403).json({ error: "Unauthorized access" });
+    }
+
+    const userId = req.session.user.id;
+    const q = `SELECT teacher_id, teacher_name FROM teachers WHERE user_id = ?`;
+
+    connection.query(q, [userId], (err, result) => {
+        if (err) {
+            console.error("Error fetching teacher ID:", err);
+            return res.status(500).send("Internal Server Error");
+        }
+
+        if (result.length === 0) {
+            return res.status(404).json({ error: "Teacher not found" });
+        }
+
+        const teacherId = result[0].teacher_id;
+        const teacherName = result[0].teacher_name;
+
+        const sql = "SELECT timetable FROM teacher_timetables WHERE teacher_id = ?";
+        connection.query(sql, [teacherId], (err, results) => {
+            if (err) {
+                console.error("Error fetching teacher timetable:", err);
+                return res.status(500).send("Internal Server Error");
+            }
+
+            let count = 0;
+            if (results.length > 0) {
+                let teacher_Timetable = results[0].timetable;
+
+                if (typeof teacher_Timetable === "string") {
+                    try {
+                        teacher_Timetable = JSON.parse(teacher_Timetable);
+                    } catch (parseError) {
+                        console.error("JSON Parsing Error:", parseError);
+                        return res.status(500).send("Invalid timetable data");
+                    }
+                }
+
+                for (const day in teacher_Timetable) {
+                    count += teacher_Timetable[day].length;
+                }
+            }
+            let q2 = "SELECT COUNT(*) AS subject_count FROM teacher_subjects WHERE teacher_id = ?;";
+            connection.query(q2, [teacherId], (err, cnt) => {
+                if (err) {
+                    console.error(err);
+                    return res.send("Error fetching subjects");
+                }
+                let subCnt = cnt[0].subject_count;
+                res.render("teacher-dashboard.ejs", {
+                    teacherName,
+                    lectureCount: count,
+                    subCnt
+                });
+            });
+        });
+    });
+});
 
 app.get("/teacher-timetable", authMiddleware("teacher"), async (req, res) => {
     try {
@@ -1578,6 +1653,85 @@ app.get("/teacher-timetable", authMiddleware("teacher"), async (req, res) => {
         res.status(500).send("Error fetching timetable");
     }
 });
+
+// app.get("/student/dashboard", authMiddleware("student"), (req, res) => {
+//     res.render("student-dashboard.ejs");
+// });
+
+app.get("/student/dashboard", authMiddleware("student"), (req, res) => {
+    const studentId = req.user.id;
+    const studentClassId = req.user.class_id;
+
+    if (!studentClassId) {
+        return res.status(403).send("You are not assigned to any class.");
+    }
+
+    const q1 = "SELECT username FROM users WHERE id = ?;";
+    connection.query(q1, [studentId], (err, result1) => {
+        if (err) {
+            console.error(err);
+            return res.send("Error fetching username");
+        }
+
+        const stu_name = result1[0]?.username || "Student";
+
+        const q2 = "SELECT class_name FROM classes WHERE class_id = ?;";
+        connection.query(q2, [studentClassId], (err, result2) => {
+            if (err) {
+                console.error(err);
+                return res.send("Error fetching class name");
+            }
+
+            const class_name = result2[0]?.class_name || "Unknown Class";
+
+            const q3 = "SELECT * FROM saved_timetables WHERE class_id = ?";
+            connection.query(q3, [studentClassId], (err, result3) => {
+                if (err) {
+                    console.error("Error fetching timetable:", err);
+                    return res.status(500).send("Internal Server Error");
+                }
+
+                let lectureCount = 0;
+
+                if (result3.length > 0) {
+                    let timetableData = result3[0].timetable;
+
+                    if (typeof timetableData === "string") {
+                        try {
+                            timetableData = JSON.parse(timetableData);
+                        } catch (e) {
+                            console.error("Error parsing timetable:", e);
+                            return res.status(500).send("Invalid timetable format");
+                        }
+                    }
+
+                    const actualTimetable = timetableData?.timetable;
+
+                    if (actualTimetable && typeof actualTimetable === "object") {
+                        for (const period in actualTimetable) {
+                            const dailySchedule = actualTimetable[period];
+                        
+                            for (const day in dailySchedule) {
+                                const lecture = dailySchedule[day];
+                                if (lecture && typeof lecture === "object") {
+                                    lectureCount += 1;
+                                }
+                            }
+                        }
+                        
+                    }
+                }
+
+                res.render("student-dashboard.ejs", {
+                    stu_name,
+                    class_name,
+                    lectureCount
+                });
+            });
+        });
+    });
+});
+
 
 // app.get("/student-timetable", authMiddleware("student"), (req, res) => {
 //     const q = "SELECT * FROM saved_timetables";

@@ -233,8 +233,8 @@ h2 {
     border-radius: 15px;
     cursor: pointer;
     transition: all 0.3s ease-in-out;
-    box-shadow: 0px 4px 6px rgba(0, 0, 255, 0.2); /* Subtle shadow */
-    background-color: #007bff; /* Default Blue */
+    box-shadow: 0px 4px 6px rgba(0, 0, 255, 0.2); 
+    background-color: #007bff; 
     color: white;
     margin-bottom: 10px;
 }
@@ -252,7 +252,7 @@ h2 {
 }
 
 .admin { background: #50a4ff; color: white; }
-.teacher-role { background: #50a4ff; color: white; }
+.teacher { background: #50a4ff; color: white; }
 .student { background: #50a4ff; color: white; }
 
 
