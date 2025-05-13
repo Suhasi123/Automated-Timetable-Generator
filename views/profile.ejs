@@ -1,0 +1,54 @@
+
+<% layout("/layouts/boilerplate.ejs") %>
+
+<body>
+<div class="dashboard-container">
+    <!-- Sidebar Navigation -->
+    <% if (user.role === 'admin') { %>
+        <%- include("includes/admin_sidebar.ejs") %>
+    <% } %>
+    <% if (user.role === 'teacher') { %>
+        <%- include("includes/teacher_sidebar.ejs") %>
+    <% } %>
+    <% if (user.role === 'student') { %>
+        <%- include("includes/student_sidebar.ejs") %>
+    <% } %>
+    
+
+    <!-- Main Content -->
+    <div class="content">
+        <h3>Profile & Settings</h3>
+        <hr>
+
+        <div class="card p-4">
+            <h5>Account Information</h5>
+            <br>
+            <p><strong>Id:</strong> <%= user.id %></p>
+            <p><strong>Username:</strong> <%= user.username %></p>
+            <p><strong>Role:</strong> <%= user.role %></p>
+
+            <% if (user.role === 'student') { %>
+                <p><strong>Class:</strong> <%= className %></p>
+            <% } %>
+        </div>
+        <div class="card p-4 mt-4">
+            <h5>Change Password</h5>
+            <form action="/profile/change-password" method="POST">
+                <div class="mb-3">
+                    <label for="currentPassword" class="form-label">Current Password</label>
+                    <input type="password" class="form-control" id="currentPassword" name="currentPassword" required>
+                </div>
+                <div class="mb-3">
+                    <label for="newPassword" class="form-label">New Password</label>
+                    <input type="password" class="form-control" id="newPassword" name="newPassword" required>
+                </div>
+                <div class="mb-3">
+                    <label for="confirmPassword" class="form-label">Confirm New Password</label>
+                    <input type="password" class="form-control" id="confirmPassword" name="confirmPassword" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Change Password</button>
+            </form>
+        </div>
+    </div>
+</div>
+</body>

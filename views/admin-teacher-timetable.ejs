@@ -1,76 +1,198 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>All Teacher Timetables</title>
-    <style>
-        table {
-            width: 85%;
-            border-collapse: collapse;
-            text-align: center;
-            margin: 20px auto;
-        }
-        th, td {
-            border: 1px solid black; 
-            text-align: center; 
-            vertical-align: middle; /* Align content to the middle */
-            padding: 10px; /* Add spacing inside cells */
-            min-width: 120px; /* Ensure consistent column width */
-            height: 50px; /* Set a minimum height for rows */
-            word-wrap: break-word; /* Prevent overflow in case of long text */
-        }
-        th {
-            background-color: #f2f2f2; /* Light gray background for headers */
-            font-weight: bold;
-        }
+<% layout("/layouts/boilerplate.ejs") %>
+<style>
+    table {
+        width: 85%;
+        text-align: center;
+        margin: 20px auto;
+    }
+    th, td {
+        border: 1px solid black; 
+        text-align: center; 
+        vertical-align: middle;
+        padding: 10px; 
+        min-width: 120px;
+        height: 50px;
+        word-wrap: break-word;
+    }
+    th {
+        background-color: #f2f2f2;
+        font-weight: bold;
+    }
+    .timetable-container {
+        margin-bottom: 30px;
+    }
+    .center-button {
+        text-align: center;
+        margin-top: 20px;
+    }
+</style>
 
-        td:empty {
-            height: 50px; /* Ensures empty cells have the same height */
-        }
-        .timetable-container {
-            margin-bottom: 30px;
-        }
-    </style>
-</head>
 <body>
-    <a href="/ctg">Home</a>
-    <h2 style="text-align: center;">All Teacher Timetables</h2>
+<div class="dashboard-container">
+    
+    <%- include("includes/admin_sidebar.ejs") %>
 
-    <% teacherTimetables.forEach(teacher => { %>
-        <div class="timetable-container">
-            <h3 style="text-align: center;"><%= teacher.teacher_name %>'s Timetable</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Time / Day</th>
-                        <th>Monday</th>
-                        <th>Tuesday</th>
-                        <th>Wednesday</th>
-                        <th>Thursday</th>
-                        <th>Friday</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <% for (let period = 1; period <= 8; period++) { %>
-                        <tr>
-                            <th>Period <%= period %></th>
-                            <% ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].forEach(day => { %>
-                                <td>
-                                    <% if (teacher.timetable[period] && teacher.timetable[period][day]) { %>
-                                        <%= teacher.timetable[period][day].subject_name %><br>
-                                        <%= teacher.timetable[period][day].room_name %><br>
-                                        <%= teacher.timetable[period][day].class_name %>
-                                    <% } else { %>
-                                        -
-                                    <% } %>
-                                </td>
-                            <% }); %>
-                        </tr>
-                    <% } %>
-                </tbody>
-            </table>
+    <div class="content">
+        <h2 class="text-center mb-4" style="color: black;"><i class="bi bi-calendar-week"></i> Teacher Timetables</h2>
+
+       
+        <div class="text-center mb-4">
+            <label for="teacherSelect" class="fw-bold"><i class="bi bi-funnel"></i> Filter by Teacher:</label>
+            <select id="teacherSelect" class="form-select w-auto d-inline-block" onchange="filterTimetable()">
+                <option value="all">Show All</option>
+                <% for (let tid in teacherTimetables) { %>
+                    <option value="<%= tid %>"><%= teacherTimetables[tid].teacher_name %></option>
+                <% } %>
+            </select>
         </div>
-    <% }); %>
+
+        <% Object.keys(teacherTimetables).forEach(tid => { %>
+            <% let teacher = teacherTimetables[tid]; %>
+            <div id="timetable_<%= tid %>" class="timetable-container border rounded p-3 mb-4 shadow-sm bg-light">
+                <h3 style="text-align: center;"><%= teacher.teacher_name %>'s Timetable</h3>
+                <table id="timetableTable_<%= tid %>">
+                    <thead>
+                        <tr>
+                            <th>Time / Day</th>
+                            <th>Monday</th>
+                            <th>Tuesday</th>
+                            <th>Wednesday</th>
+                            <th>Thursday</th>
+                            <th>Friday</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% let count = 0; %>
+                        <% for (let pd = 1; pd <= periodTimings.length; pd++) { %>
+                            <% let period = pd - count; %>
+                            <tr>
+                                <% if (periodTimings[pd - 1].includes("Break")) { %>
+                                    <% count++; %>
+                                    <th colspan="6" style="text-align: center; background-color: lightgray;"><%= periodTimings[pd - 1] %></th>
+                                <% } else { %>
+                                    <th><%= periodTimings[pd - 1] %></th>
+                                    <% ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].forEach(day => { %>
+                                        <td>
+                                            <% if (teacherTimetables[tid].timetable[period] && teacherTimetables[tid].timetable[period][day]) { %>
+                                                <b><%= teacherTimetables[tid].timetable[period][day].subject_name %></b><br>
+                                                Class: <%= teacherTimetables[tid].timetable[period][day].class_name %><br>
+                                                Room: <%= teacherTimetables[tid].timetable[period][day].room_name %>
+                                            <% } else { %>
+                                                -
+                                            <% } %>
+                                        </td>
+                                    <% }); %>
+                                <% } %>
+                            </tr>
+                        <% } %>
+                    </tbody>
+                </table>
+    
+                <div class="text-center">
+                    <button class="btn btn-success" onclick="downloadPDF('<%= tid %>')">
+                        <i class="bi bi-file-earmark-pdf"></i> Download PDF
+                    </button>
+                </div>
+            </div>
+        <% }); %>
+        
+        <!-- Save All Timetables Button -->
+        <!-- <div class="center-button">
+            <button class="btn btn-primary" onclick="saveAllTeacherTimetables()">
+                <i class="bi bi-save"></i> Save All Timetables
+            </button>
+        </div> -->
+    </div>
+</div>
+
+<script>
+    const teacherTimetables = <%- JSON.stringify(teacherTimetables) %>;
+    const periodTimings = <%- JSON.stringify(periodTimings) %>;
+
+    function filterTimetable() {
+        let selected = document.getElementById("teacherSelect").value;
+
+        document.querySelectorAll(".timetable-container").forEach(div => {
+            div.style.display = (selected === "all" || div.id === "timetable_" + selected) ? "block" : "none";
+        });
+    }
+
+    function downloadPDF(teacherId) {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+
+        const teacherName = teacherTimetables[teacherId].teacher_name;
+
+        doc.setFontSize(18);
+        doc.text(`Timetable for ${teacherName}`, 140, 15, { align: "center" });
+
+        const headers = ["Time / Day", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+        const tableData = [];
+        let count = 0;
+
+        for (let pd = 1; pd <= periodTimings.length; pd++) {
+            let period = pd - count;
+
+            if (periodTimings[pd - 1].includes("Break")) {
+                count++;
+                tableData.push([{ content: periodTimings[pd - 1], colSpan: 6, styles: { halign: "center", fillColor: [200, 200, 200] } }]);
+            } else {
+                const row = [periodTimings[pd - 1]];
+
+                ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].forEach(day => {
+                    if (teacherTimetables[teacherId].timetable[period] && teacherTimetables[teacherId].timetable[period][day]) {
+                        const entry = teacherTimetables[teacherId].timetable[period][day];
+                        row.push(`${entry.subject_name}\nClass: ${entry.class_name}\nRoom: ${entry.room_name}`);
+                    } else {
+                        row.push("-");
+                    }
+                });
+
+                tableData.push(row);
+            }
+        }
+
+        doc.autoTable({
+            head: [headers],
+            body: tableData,
+            startY: 25,
+            theme: "grid",
+            styles: { fontSize: 10, cellPadding: 4, valign: "middle" },
+            headStyles: { fillColor: [100, 150, 255] },
+            alternateRowStyles: { fillColor: [240, 240, 240] },
+        });
+
+        doc.save(`Timetable_${teacherName}.pdf`);
+    }
+    
+    function saveAllTeacherTimetables() {
+        if (!teacherTimetables || Object.keys(teacherTimetables).length === 0) {
+            alert("No teacher timetable data found.");
+            return;
+        }
+
+        fetch('/timetable/save-teachers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(teacherTimetables)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert("All teacher timetables saved successfully!");
+            } else {
+                alert("Error: " + data.message);
+            }
+        })
+        .catch(error => {
+            console.error("Fetch Error:", error);
+            alert("Error saving teacher timetables.");
+        });
+    }
+</script>
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
-</html>

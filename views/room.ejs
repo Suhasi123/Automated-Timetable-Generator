@@ -1,51 +1,10 @@
 
 <% layout("/layouts/boilerplate.ejs") %>
-<style>
-    
-        .table-container {
-            background: white !important;
-            border-radius: 8px !important;
-            padding: 15px !important;
-            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1) !important;
-        }
-        .table thead {  
-            background-color: #005C9C !important;
-            color: white !important;
-        }
-        thead tr th {
-            font-size: large;
-        }
-        .table tbody tr:hover {
-            background-color: #f5faff !important;
-        }
-        .btn-edit {
-            background-color: #007bff !important;
-            color: white !important;
-        }
-        .btn-delete {
-            background-color: #dc3545 !important;
-            color: white !important;
-        }
 
-</style>
 <body>
 <div class="dashboard-container">
     <!-- Sidebar Navigation -->
-    <div class="sidebar">
-        <h4 class="text-center mb-3"><i class="bi bi-person-circle"></i> Admin Panel</h4>
-        <!-- <a href="/admin/dashboard" class="fw-bold" style="font-size: 20px;"> Dashboard</a> -->
-        <a href="/admin/dashboard"><i class="bi bi-house-door-fill"></i> Dashboard</a>
-        <a href="/admin/users"><i class="bi bi-people"></i> User Details</a>
-        <a href="/class"><i class="bi bi-building"></i> Class Details</a>
-        <a href="/room"><i class="bi bi-door-closed"></i> Room Details</a>
-        <a href="/subject"><i class="bi bi-book"></i> Subject Details</a>
-        <a href="/teacher"><i class="bi bi-person-badge"></i> Teacher Details</a>
-        <a href="/timing"><i class="bi bi-clock"></i> Timing Details</a>
-        <a href="/timetable"><i class="bi bi-calendar-check"></i> Generate Timetable</a>
-        <a href="/timetable/saved"><i class="bi bi-save2"></i> Saved Timetable</a>
-        <a href="#"><i class="bi bi-gear"></i> Profile & Settings</a>
-        <a href="/logout"><i class="bi bi-box-arrow-right"></i> Logout</a>
-    </div>
+    <%- include("includes/admin_sidebar.ejs") %>
 
     <!-- Main Content -->
     <div class="content">

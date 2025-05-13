@@ -104,6 +104,76 @@ app.get("/logout", (req, res) => {
     });
 });
 
+app.get("/profile", (req, res)=>{
+
+    if (!req.session.user) {
+        return res.redirect('/login');
+    }
+
+    if (req.session.user.role === 'student') {
+        let q = "SELECT class_name FROM classes WHERE class_id = ?";
+        connection.query(q, [req.session.user.class_id], (err, results) => {
+            if (err) {
+                console.error("Class Name Fetch Error:", err);
+                return res.status(500).send("Server Error");
+            }
+
+            const className = results[0]?.class_name || "N/A";
+            res.render("profile.ejs", { user: req.session.user, className });
+        });
+    } else {
+        res.render("profile.ejs", { user: req.session.user, className: null });
+    }
+});
+
+// POST Change Password
+app.post('/profile/change-password', async (req, res) => {
+    const { currentPassword, newPassword, confirmPassword } = req.body;
+
+    if (newPassword !== confirmPassword) {
+        return res.send('New passwords do not match');
+    }
+
+    // Get user from DB
+    let q = "SELECT * FROM users WHERE username = ?";
+    connection.query(q, [req.session.user.username], (err, rows) => {
+        if (err) {
+            console.error("user Fetch Error:", err);
+            return res.status(500).send("Server Error");
+        }
+            
+        const dbUser = rows[0];
+        bcrypt.compare(currentPassword, dbUser.password, (err, match) => {
+            if (err) {
+                console.error("Password compare error:", err);
+                return res.status(500).send("Server Error");
+            }
+    
+            if (!match) {
+                return res.send('Current password is incorrect');
+            }
+    
+            // Hash new password
+            bcrypt.hash(newPassword, 10, (err, hashedPassword) => {
+                if (err) {
+                    console.error("Password hash error:", err);
+                    return res.status(500).send("Server Error");
+                }
+
+                let updateQuery = "UPDATE users SET password = ? WHERE username = ?";
+                connection.query(updateQuery, [hashedPassword, req.session.user.username], (err, result) => {
+                    if (err) {
+                        console.error("Password update error:", err);
+                        return res.status(500).send("Server Error");
+                    }
+                    console.log("Password updated successfully!");
+                    res.redirect("/login");
+                });
+            });
+        });
+    });
+});
+
 app.get("/admin/dashboard", authMiddleware("admin"), (req, res) => {
     const q1 = "SELECT count(*) FROM classes";
     connection.query(q1, (err, result1) => {
@@ -1104,9 +1174,15 @@ app.post("/timetable/save", authMiddleware("admin"), (req, res) => {
             console.error(" Error saving timetable:", err);
             return res.json({ success: false, message: "Database error" });
         }
-        generateTeacherTimetable();
+        //generateTeacherTimetable();
+        console.log("Teacher Timetable generated!");
         res.json({ success: true, message: "Timetable saved successfully!" });
     });
+});
+
+app.get("/timetable/final", authMiddleware("admin"), (req, res) => {
+    generateTeacherTimetable();
+            res.redirect("/timetable/saved");
 });
 
 // Fetch saved timetables
@@ -1138,7 +1214,7 @@ app.get("/timetable/saved", authMiddleware("admin"), (req, res) => {
             };
         });
 
-        //console.log("savedTimetables", savedTimetables);
+        //console.log("savedTimetables", savedTimetables[0].timetable);
         res.render("saved_timetables.ejs", { savedTimetables, periodTimings });
     });
 });
@@ -1439,7 +1515,7 @@ async function saveTeacherTimetableToDB(teacherTimetable) {
                             connection.rollback();
                             return;
                         }
-                        //  console.log(`Stored timetable for ${teacher_name} (ID: ${teacher_id})`);
+                        // console.log(`Stored timetable for ${teacher_name} (ID: ${teacher_id})`);
                     }
                 );
             });
@@ -1460,75 +1536,72 @@ async function saveTeacherTimetableToDB(teacherTimetable) {
     }
 }
 
-// app.get('/admin/teacher-timetable', async (req, res) => {
-//     try {
-//         // const teacherTimetable = await generateTeacherTimetable(); // Function to get teacher-wise timetable
-//         // if (!teacherTimetable || Object.keys(teacherTimetable).length === 0) {
-//         //     return res.status(404).json({ message: "No teacher timetables found" });
-//         // }
-//         // console.log(teacherTimetable);
-//         // res.render('teacher-timetable.ejs', { teacherTimetable, periodTimings });
-//     } catch (error) {
-//         console.error("Error fetching teacher timetable:", error);
-//         res.status(500).send("Error fetching timetable");
-//     }
-// });
-
-app.get("/admin/teacher-timetables", authMiddleware("admin"), async (req, res) => {
-    try {
-        // Ensure the user is an admin
-        if (!req.session.user || req.session.user.role !== "admin") {
-            return res.status(403).json({ error: "Unauthorized access" });
+app.get("/teacher/timetables", authMiddleware("admin"), (req, res) => {
+    const query = "SELECT * FROM teacher_timetables ORDER BY teacher_id ASC";
+    
+    connection.query(query, (err, results) => {
+        if (err) {
+            console.error("Error fetching teacher timetables:", err);
+            return res.status(500).json({ error: "Database error" });
         }
-
-        // Fetch all teacher timetables
-        const sql = `
-            SELECT t.teacher_name, tt.timetable 
-            FROM teacher_timetables tt
-            JOIN teachers t ON tt.teacher_id = t.teacher_id
-        `;
-
-        connection.query(sql, (err, results) => {
-            if (err) {
-                console.error("Error fetching all teacher timetables:", err);
-                return res.status(500).send("Internal Server Error");
-            }
-
-            if (results.length === 0) {
-                return res.status(404).json({ message: "No teacher timetables found" });
-            }
-
-            // Process the timetables
-            const teacherTimetables = results.map(row => {
-                let timetable = row.timetable;
-
-                // Parse the timetable if it's stored as a string
-                if (typeof timetable === "string") {
-                    try {
-                        timetable = JSON.parse(timetable);
-                    } catch (parseError) {
-                        console.error("JSON Parsing Error:", parseError);
-                        console.error("Invalid JSON Data:", timetable);
-                        timetable = {}; // Set to empty object if parsing fails
+        
+        const teacherTimetables = {};
+        
+        results.forEach(row => {
+            let parsedData = {};
+            
+            try {
+                // Ensure we're parsing only if it's a string
+                const rawTimetable = typeof row.timetable === "string" 
+                    ? JSON.parse(row.timetable) 
+                    : row.timetable;
+                
+                // Transform the data structure to match the template's expectations
+                parsedData = {}; // Reset to empty object for transformed data
+                
+                // Process each day's schedule
+                for (const day in rawTimetable) {
+                    if (rawTimetable[day] && Array.isArray(rawTimetable[day])) {
+                        // Process each period entry for this day
+                        rawTimetable[day].forEach(entry => {
+                            const periodNum = entry.period;
+                            
+                            // Initialize period object if it doesn't exist
+                            if (!parsedData[periodNum]) {
+                                parsedData[periodNum] = {};
+                            }
+                            
+                            // Add this day's entry to the appropriate period
+                            parsedData[periodNum][day] = {
+                                subject_name: entry.subject,
+                                class_name: entry.class,
+                                room_name: entry.room
+                            };
+                        });
                     }
                 }
-
-                return {
-                    teacher_name: row.teacher_name,
-                    timetable: timetable
-                };
-            });
-            // teacherTimetable = teacherTimetables;
-            // console.log(teacherTimetable);
-
-            // Render the EJS page with the data
-            res.render("admin-teacher-timetable.ejs", { teacherTimetables, periodTimings });
+                
+            } catch (error) {
+                console.error(`Error processing timetable for teacher ID ${row.teacher_id}:`, error);
+                parsedData = {};
+            }
+            
+            teacherTimetables[row.teacher_id] = {
+                id: row.id,
+                teacher_id: row.teacher_id,
+                timetable: parsedData,
+                teacher_name: row.teacher_name,
+            };
         });
-
-    } catch (error) {
-        console.error("Error fetching all teacher timetables:", error);
-        res.status(500).send("Error fetching timetables");
-    }
+        
+        // Debug log to verify the transformed structure
+        // console.log("Transformed timetable structure for first teacher:", 
+        //     Object.keys(teacherTimetables).length > 0 
+        //         ? JSON.stringify(teacherTimetables[Object.keys(teacherTimetables)[0]].timetable, null, 2)
+        //         : "No teachers found");
+        
+        res.render("admin-teacher-timetable.ejs", { teacherTimetables, periodTimings });
+    });
 });
 
 // app.get("/teacher/dashboard", authMiddleware("teacher"), (req, res) => {
@@ -1604,7 +1677,7 @@ app.get("/teacher-timetable", authMiddleware("teacher"), async (req, res) => {
         }
 
         const userId = req.session.user.id;
-        let q = `SELECT teacher_id, teacher_name FROM teachers WHERE user_id = ?`; // Use placeholders to prevent SQL injection
+        let q = `SELECT teacher_id, teacher_name FROM teachers WHERE user_id = ?`; 
         
         connection.query(q, [userId], (err, result) => {
             if (err) {
