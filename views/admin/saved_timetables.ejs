@@ -1,4 +1,15 @@
-
+<% function getLectureIndex(id) {
+    let lectureIndex = 0;
+    for (let i = 0; i < periodTimings.length; i++) {
+        if (!periodTimings[i].is_break) {
+            lectureIndex++;
+        }
+        if (periodTimings[i].id === id) {
+            return lectureIndex;
+        }
+    }
+    return -1;
+} %>
 <% layout("/layouts/boilerplate.ejs") %>
 <style>
     .timetable-container {
@@ -94,7 +105,7 @@
 <body>
     <div class="dashboard-container">
         <!-- Sidebar Navigation -->
-        <%- include("includes/admin_sidebar.ejs") %>
+        <%- include("../includes/admin_sidebar.ejs") %>
     
         <!-- Main Content -->
         <div class="content">
@@ -129,27 +140,61 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <% count=0 %>
-                                <% for (let pd = 1; pd <= periodTimings.length; pd++) { %>
+                                <% let merged = {}; %>
+                                <% for (let pd = 0; pd < periodTimings.length; pd++) {
+                                    let periodObj = periodTimings[pd];
+                                    let label = `${formatTime(periodObj.start_time)} - ${formatTime(periodObj.end_time)}`;
+
+                                    if (periodObj.is_break) { %>
+                                        <tr>
+                                            <th colspan="6" style="text-align: center; background-color: #e0e0e0;">
+                                                <%= label %> (Break)
+                                            </th>
+                                        </tr>
+                                    <% } else {
+                                        let currentLecture = getLectureIndex(periodObj.id);
+                                        let nextPeriod = periodTimings[pd + 1];
+                                        let nextLecture = nextPeriod ? getLectureIndex(nextPeriod.id) : null;
+                                        let canMerge = nextPeriod && !nextPeriod.is_break;
+                                %>
                                     <tr>
-                                    <% period = pd-count %>
-                                    <% if (periodTimings[pd-1].includes("Break")) { %>
-                                        <% count++ %>
-                                        <th colspan="6" style="text-align: center; background-color: lightgray;"><%= periodTimings[pd-1] %></th>
-                                    <% } else { %>
-                                        
-                                            <th><%= periodTimings[pd-1] %></th>
-                                            <% ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].forEach(day => { %>
-                                                <td>
-                                                    <%= timetable.timetable[period]?.[day]?.subject_name || '-' %><br>
-                                                    <%= timetable.timetable[period]?.[day]?.teacher_name || '-' %><br>
-                                                    <%= timetable.timetable[period]?.[day]?.room_name || '-' %>
+                                        <th><%= label %></th>
+                                        <% ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].forEach(day => {
+                                            let key = `${currentLecture}-${day}`;
+                                            if (merged[key]) return;
+
+                                            let current = timetable.timetable[currentLecture]?.[day];
+                                            let next = (canMerge && nextLecture !== null)
+                                                ? timetable.timetable[nextLecture]?.[day]
+                                                : null;
+
+                                            let isDouble = canMerge && current && next &&
+                                                current.subject_name === next.subject_name &&
+                                                current.teacher_name === next.teacher_name &&
+                                                current.room_name === next.room_name;
+                                        %>
+                                            <% if (isDouble) { %>
+                                                <td rowspan="2">
+                                                    <%= current.subject_name %><br>
+                                                    <%= current.teacher_name %><br>
+                                                    <%= current.room_name %>
                                                 </td>
-                                            <% }); %>
-                                    <% } %>
+                                                <% merged[`${nextLecture}-${day}`] = true; %>
+                                            <% } else { %>
+                                                <td>
+                                                    <% if (current) { %>
+                                                        <%= current.subject_name %><br>
+                                                        <%= current.teacher_name %><br>
+                                                        <%= current.room_name %>
+                                                    <% } else { %>
+                                                        -
+                                                    <% } %>
+                                                </td>
+                                            <% } %>
+                                        <% }); %>
                                     </tr>
-                                <% } %>
-                            </tbody>                
+                                <% } } %>
+                            </tbody>
                         </table>
         
                         <div style="text-align: center;">
@@ -174,37 +219,42 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <% count=0 %>
-                                <% for (let pd = 1; pd <= periodTimings.length; pd++) { %>
-                                    <tr>
-                                    <% period = pd-count %>
-                                    <% if (periodTimings[pd-1].includes("Break")) { %>
-                                        <% count++ %>
-                                        
-                                        <th colspan="6" style="text-align: center; background-color: lightgray;"><%= periodTimings[pd-1] %></th>
-                                    <% } else { %>
-                                            <th><%= periodTimings[pd-1] %></th>
-                                            <% ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].forEach(day => { %>
+                                <% for (let pd = 0; pd < periodTimings.length; pd++) {
+                                    const periodObj = periodTimings[pd];
+                                    const timeLabel = `${formatTime(periodObj.start_time)} - ${formatTime(periodObj.end_time)}`;
+                                %>
+                                    <% if (periodObj.is_break) { %>
+                                        <tr>
+                                            <th colspan="6" style="text-align: center; background-color: lightgray;">
+                                                <%= timeLabel %> (Break)
+                                            </th>
+                                        </tr>
+                                    <% } else {
+                                        const period = getLectureIndex(periodObj.id);
+                                    %>
+                                        <tr>
+                                            <th><%= timeLabel %></th>
+                                            <% ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].forEach(day => {
+                                                const cell = timetable.timetable?.[period]?.[day] || {};
+                                            %>
                                                 <td>
-                                                    <input type="text" value="<%= timetable.timetable[period]?.[day]?.subject_name || '' %>" 
+                                                    <input type="text" value="<%= cell.subject_name || '' %>" 
                                                         data-day="<%= day %>" data-period="<%= period %>"
-                                                        class="editable-cell subject">
-                                                    <br>
-                                                    <input type="text" value="<%= timetable.timetable[period]?.[day]?.teacher_name || '' %>" 
+                                                        class="editable-cell subject"><br>
+                                                    <input type="text" value="<%= cell.teacher_name || '' %>" 
                                                         data-day="<%= day %>" data-period="<%= period %>"
-                                                        class="editable-cell teacher">
-                                                    <br>
-                                                    <input type="text" value="<%= timetable.timetable[period]?.[day]?.room_name || '' %>"
-                                                        data-day="<%= day %>" data-period="<%= period %>" 
+                                                        class="editable-cell teacher"><br>
+                                                    <input type="text" value="<%= cell.room_name || '' %>" 
+                                                        data-day="<%= day %>" data-period="<%= period %>"
                                                         class="editable-cell room">
                                                 </td>
                                             <% }); %>
-                                        
+                                        </tr>
                                     <% } %>
-                                    </tr>
                                 <% } %>
                             </tbody>
                         </table>
+
          
                         <div style="text-align: center;">
                             <button class="btn btn-primary" onclick="saveEditedTimetable('<%= timetable.id %>')"><i class="bi bi-save"></i> Save Timetable</button>
@@ -215,12 +265,12 @@
                 <% }); %>
                 
                 <div style="text-align: center;">
-                <form method="POST" action="/timetable/delete/<%= createdAt %>?_method=DELETE">
+                <form method="POST" action="/admin/timetable/delete/<%= createdAt %>?_method=DELETE">
                     <input type="hidden" name="created_at" value="<%= createdAt %>">
                     <button class="btn btn-danger">Delete All Timetables </button>
                 </form>
                 <br>
-                <form method="GET" action="/timetable/final">
+                <form method="GET" action="/admin/timetable/final">
                     <input type="hidden" name="created_at" value="<%= createdAt %>">
                     <button class="btn btn-primary">Finalize Timetables </button>
                 </form>
@@ -273,7 +323,7 @@
         
                     let formattedTimetable = { timetable: updatedTimetable } ;
         
-                    fetch('/timetable/update', {
+                    fetch('/admin/timetable/update', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ timetableId, formattedTimetable }) 
@@ -298,66 +348,106 @@
                         format: "a4"
                     });
 
-                    // Find the timetable container using the correct ID format
                     const timetableContainer = document.querySelector(`#timetable_${classId}`);
                     if (!timetableContainer) {
-                        alert("Timetable not found! Check class ID and HTML structure.");
+                        alert("Timetable not found!");
                         return;
                     }
 
-                    // Get class name from <h3>
                     const className = timetableContainer.querySelector("h3")?.innerText.replace(" Timetable", "").trim() || `Class_${classId}`;
 
-                    // Add title
+                    // PDF Title
                     doc.setFontSize(18);
-                    doc.text(`Timetable for ${className}`, 140, 15, { align: "center" });
+                    doc.text(`Timetable for ${className}`, 148.5, 15, { align: "center" });
 
-                    // Extract table
                     const table = timetableContainer.querySelector("table");
                     if (!table) {
                         alert("Timetable table not found!");
                         return;
                     }
 
-                    // Extract headers
+                    // Extract table header
                     const headers = [];
-                    table.querySelectorAll("thead th").forEach(th => headers.push(th.innerText.trim()));
-
-                    // Extract rows
-                    const tableData = [];
-                    table.querySelectorAll("tbody tr").forEach(row => {
-                        let rowData = [];
-
-                        // Handle Break Periods with colspan
-                        const breakCell = row.querySelector("th[colspan='6']");
-                        if (breakCell) {
-                            tableData.push([{ content: breakCell.innerText, colSpan: 6, styles: { halign: "center", fillColor: [200, 200, 200] } }]);
-                        } else {
-                            row.querySelectorAll("th, td").forEach(cell => rowData.push(cell.innerText.trim()));
-                            tableData.push(rowData);
-                        }
+                    table.querySelectorAll("thead tr th").forEach((th, index) => {
+                        headers.push({
+                            content: th.innerText.trim(),
+                            styles: {
+                                halign: "center",
+                                fillColor: [100, 150, 255], // Header row color
+                                textColor: 255,
+                                fontStyle: "bold"
+                            }
+                        });
                     });
 
-                    // Generate table in PDF
+                    // Build table body
+                    const body = [];
+                    table.querySelectorAll("tbody tr").forEach(tr => {
+                        const row = [];
+                        const cells = Array.from(tr.children);
+
+                        if (cells.length === 1 && cells[0].hasAttribute("colspan")) {
+                            // Break row
+                            row.push({
+                                content: cells[0].innerText.trim(),
+                                colSpan: headers.length,
+                                styles: {
+                                    halign: "center",
+                                    fontStyle: "bold",
+                                    fillColor: [220, 220, 220]
+                                }
+                            });
+                        } else {
+                            cells.forEach((cell, index) => {
+                                const cellData = {
+                                    content: cell.innerText.trim(),
+                                    styles: {
+                                        halign: "center"
+                                    }
+                                };
+
+                                // Style the first column (Period Timings)
+                                if (index === 0) {
+                                    cellData.styles.fillColor = [230, 230, 250]; // Light lavender
+                                    cellData.styles.fontStyle = "bold";
+                                }
+
+                                // Handle colspan/rowspan
+                                if (cell.hasAttribute("colspan")) {
+                                    cellData.colSpan = parseInt(cell.getAttribute("colspan"));
+                                }
+                                if (cell.hasAttribute("rowspan")) {
+                                    cellData.rowSpan = parseInt(cell.getAttribute("rowspan"));
+                                }
+
+                                row.push(cellData);
+                            });
+                        }
+
+                        body.push(row);
+                    });
+
+                    // Generate the timetable in PDF
                     doc.autoTable({
                         head: [headers],
-                        body: tableData,
+                        body: body,
                         startY: 25,
                         theme: 'grid',
                         styles: {
                             fontSize: 10,
                             cellPadding: 4,
-                            valign: "middle"
+                            valign: "middle",
+                            halign: "center"
                         },
-                        headStyles: { fillColor: [100, 150, 255] },
-                        alternateRowStyles: { fillColor: [240, 240, 240] },
+                        // No alternate row coloring
+                        didParseCell: function (data) {
+                            // No-op: we manually style first column & header already
+                        }
                     });
 
-                    // Save the file
                     doc.save(`${className}-Timetable.pdf`);
                 }
             </script>
-
         </div>
     </div>
 </body>

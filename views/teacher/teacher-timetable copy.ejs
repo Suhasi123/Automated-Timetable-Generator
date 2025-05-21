@@ -30,7 +30,7 @@
 <body>
     <div class="dashboard-container">
         <!-- Sidebar Navigation -->
-        <%- include("includes/teacher_sidebar.ejs") %>
+        <%- include("../includes/teacher_sidebar.ejs") %>
 
         <!-- Main Content -->
         <div class="content">
@@ -39,7 +39,6 @@
 
             <% for (let teacher in teacherTimetable) { %>
                 <div id="timetable_<%= teacher.replace(/\s+/g, '_') %>" class="timetable-container border rounded p-3 mb-4 shadow-sm bg-light">
-                <!-- <div id="timetable_<%= teacher.replace(/\s+/g, '_') %>" class="timetable-container"> -->
                     <h3 style="text-align: center;"><%= teacher %> Timetable</h3>
                     <table >
                         <thead>

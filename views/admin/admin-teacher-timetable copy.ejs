@@ -30,7 +30,7 @@
 <body>
 <div class="dashboard-container">
     
-    <%- include("includes/admin_sidebar.ejs") %>
+    <%- include("../includes/admin_sidebar.ejs") %>
 
     <div class="content">
         <h2 class="text-center mb-4" style="color: black;"><i class="bi bi-calendar-week"></i> Teacher Timetables</h2>
@@ -63,6 +63,8 @@
                     </thead>
                     <tbody>
                         <% let count = 0; %>
+                        <% let merged = {}; %> <!-- Track merged cells to avoid repetition -->
+                
                         <% for (let pd = 1; pd <= periodTimings.length; pd++) { %>
                             <% let period = pd - count; %>
                             <tr>
@@ -71,22 +73,47 @@
                                     <th colspan="6" style="text-align: center; background-color: lightgray;"><%= periodTimings[pd - 1] %></th>
                                 <% } else { %>
                                     <th><%= periodTimings[pd - 1] %></th>
+                
                                     <% ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].forEach(day => { %>
-                                        <td>
-                                            <% if (teacherTimetables[tid].timetable[period] && teacherTimetables[tid].timetable[period][day]) { %>
-                                                <b><%= teacherTimetables[tid].timetable[period][day].subject_name %></b><br>
-                                                Class: <%= teacherTimetables[tid].timetable[period][day].class_name %><br>
-                                                Room: <%= teacherTimetables[tid].timetable[period][day].room_name %>
-                                            <% } else { %>
-                                                -
-                                            <% } %>
-                                        </td>
+                                        <% 
+                                            let key = `${period}-${day}`;
+                                            if (merged[key]) return;
+                
+                                            let current = teacherTimetables[tid].timetable[period]?.[day];
+                                            let next = teacherTimetables[tid].timetable[period + 1]?.[day];
+                
+                                            let isDoublePeriod = current &&
+                                                next &&
+                                                current.subject_name === next.subject_name &&
+                                                current.class_name === next.class_name &&
+                                                current.room_name === next.room_name;
+                                        %>
+                
+                                        <% if (isDoublePeriod) { %>
+                                            <td rowspan="2">
+                                                <b><%= current.subject_name %></b><br>
+                                                Class: <%= current.class_name %><br>
+                                                Room: <%= current.room_name %>
+                                            </td>
+                                            <% merged[`${period + 1}-${day}`] = true; %>
+                                        <% } else { %>
+                                            <td>
+                                                <% if (current) { %>
+                                                    <b><%= current.subject_name %></b><br>
+                                                    Class: <%= current.class_name %><br>
+                                                    Room: <%= current.room_name %>
+                                                <% } else { %>
+                                                    -
+                                                <% } %>
+                                            </td>
+                                        <% } %>
                                     <% }); %>
                                 <% } %>
                             </tr>
                         <% } %>
                     </tbody>
                 </table>
+                
     
                 <div class="text-center">
                     <button class="btn btn-success" onclick="downloadPDF('<%= tid %>')">

@@ -4,7 +4,7 @@
 <body>
 <div class="dashboard-container">
     <!-- Sidebar Navigation -->
-    <%- include("includes/admin_sidebar.ejs") %>
+    <%- include("../includes/admin_sidebar.ejs") %>
 
     <!-- Main Content -->
     <div class="content">
@@ -43,7 +43,7 @@
                                 </button>
     
                                 <!-- Delete Form -->
-                                <form method="POST" action="/subject/<%= sub.subject_id %>/delete?_method=DELETE" onsubmit="return confirm('Are you sure you want to delete this subject?');">
+                                <form method="POST" action="/admin/subject/<%= sub.subject_id %>/delete?_method=DELETE" onsubmit="return confirm('Are you sure you want to delete this subject?');">
                                     <button class="btn btn-danger btn-sm"><i class="bi bi-trash"></i> Delete</button>
                                 </form>
                             </td>
@@ -61,7 +61,7 @@
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
-                        <form action="/subject/new" method="POST">
+                        <form action="/admin/subject/new" method="POST">
                             <div class="mb-3">
                                 <label for="subject_name" class="form-label"><i class="bi bi-book"></i> Subject Name:</label>
                                 <input type="text" class="form-control" name="subject_name" id="subject_name" required>
@@ -98,7 +98,7 @@
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
-                        <form action="/subject/<%= sub.subject_id %>?_method=PATCH" method="POST">
+                        <form action="/admin/subject/<%= sub.subject_id %>?_method=PATCH" method="POST">
                             <div class="mb-3">
                                 <label for="editSubjectName<%= sub.subject_id %>" class="form-label"><i class="bi bi-book"></i> Subject Name:</label>
                                 <input type="text" class="form-control" name="subject_name" id="editSubjectName<%= sub.subject_id %>" value="<%= sub.subject_name %>" required>

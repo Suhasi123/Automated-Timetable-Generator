@@ -4,7 +4,7 @@
 <body>
 <div class="dashboard-container">
     <!-- Sidebar Navigation -->
-    <%- include("includes/admin_sidebar.ejs") %>
+    <%- include("../includes/admin_sidebar.ejs") %>
 
     <!-- Main Content -->
     <div class="content">
@@ -39,7 +39,7 @@
                                 </button>
     
                                 <!-- Delete Form -->
-                                <form method="POST" action="/room/<%= room.room_id %>/delete?_method=DELETE" onsubmit="return confirm('Are you sure you want to delete this room?');">
+                                <form method="POST" action="/admin/room/<%= room.room_id %>/delete?_method=DELETE" onsubmit="return confirm('Are you sure you want to delete this room?');">
                                     <button class="btn btn-danger btn-sm"><i class="bi bi-trash"></i> Delete</button>
                                 </form>
                             </td>
@@ -57,7 +57,7 @@
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
-                        <form action="/room/new" method="POST">
+                        <form action="/admin/room/new" method="POST">
                             <div class="mb-3">
                                 <label for="room_name" class="form-label"><i class="bi bi-door-closed"></i> Room Name:</label>
                                 <input type="text" class="form-control" name="room_name" id="room_name" required>
@@ -81,7 +81,7 @@
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
-                        <form action="/room/<%= room.room_id %>?_method=PATCH" method="POST">
+                        <form action="/admin/room/<%= room.room_id %>?_method=PATCH" method="POST">
                             <div class="mb-3">
                                 <label for="editRoomName<%= room.room_id %>" class="form-label"><i class="bi bi-door-closed"></i> Room Name:</label>
                                 <input type="text" class="form-control" name="room_name" id="editRoomName<%= room.room_id %>" value="<%= room.room_name %>" required>

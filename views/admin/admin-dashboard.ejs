@@ -3,7 +3,7 @@
 <body>
     <div class="dashboard-container">
     <!-- Sidebar Navigation -->
-    <%- include("includes/admin_sidebar.ejs") %>
+    <%- include("../includes/admin_sidebar.ejs") %>
 
     <!-- Main Content -->
     <div class="content">
@@ -20,7 +20,7 @@
                     <div class="card-body">
                         <h5 class="card-title">Total Classes:&nbsp;&nbsp;<%=classCnt%></h5>
                         <p class="card-text">View & manage class details.</p>
-                        <a href="/class" class="btn btn-info">View Details</a>
+                        <a href="/admin/class" class="btn btn-info">View Details</a>
                     </div>
                 </div>
             </div>
@@ -30,7 +30,7 @@
                     <div class="card-body">
                         <h5 class="card-title">Total Teachers:&nbsp;&nbsp;<%=teacherCnt%></h5>
                         <p class="card-text">View & manage teacher details.</p>
-                        <a href="/teacher" class="btn btn-info">View Details</a>
+                        <a href="/admin/teacher" class="btn btn-info">View Details</a>
                     </div>
                 </div>
             </div>
@@ -40,7 +40,7 @@
                     <div class="card-body">
                         <h5 class="card-title">Saved Timetables&nbsp;&nbsp;&nbsp;</h5>
                         <p class="card-text">Access previously generated timetables.</p>
-                        <a href="/timetable/saved" class="btn btn-info">View Timetables</a>
+                        <a href="/admin/timetable/saved" class="btn btn-info">View Timetables</a>
                     </div>
                 </div>
             </div>
@@ -48,7 +48,7 @@
 
         <!-- Generate Timetable Button -->
         <div class="mt-4">
-            <form method="GET" action="/timetable">
+            <form method="GET" action="/admin/timetable">
                 <button class="btn btn-danger btn-lg"><i class="bi bi-calendar-check"></i> Generate Timetable</button>
             </form>
         </div>

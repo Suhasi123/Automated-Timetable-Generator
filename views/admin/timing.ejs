@@ -3,7 +3,7 @@
 <body>
     <div class="dashboard-container">
         <!-- Sidebar Navigation -->
-        <%- include("includes/admin_sidebar.ejs") %>
+        <%- include("../includes/admin_sidebar.ejs") %>
         
         <!-- Main Content -->
         <div class="content">
@@ -11,7 +11,7 @@
         <p>Manage period and break timings for the timetable.</p>
 
         <!-- Timing Form -->
-        <form id="timingForm" method="POST" action="/timing" class="border p-4 rounded shadow-sm bg-light">
+        <form id="timingForm" method="POST" action="/admin/timing" class="border p-4 rounded shadow-sm bg-light">
             <div class="row g-3">
                 <div class="col-md-6">
                     <label class="form-label"><i class="fa-regular fa-clock"></i><b> Period 1</b></label>

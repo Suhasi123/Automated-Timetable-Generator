@@ -3,7 +3,7 @@
 <body>
     <div class="dashboard-container">
     <!-- Sidebar -->
-    <%- include("includes/teacher_sidebar.ejs") %>
+    <%- include("../includes/teacher_sidebar.ejs") %>
 
     <!-- Main Content -->
     <div class="content">
@@ -29,7 +29,7 @@
         <br>
 
         <!-- Quick Access Button -->
-        <form method="GET" action="/teacher-timetable">
+        <form method="GET" action="/teacher/timetable">
             <button class="btn btn-primary btn-lg"><i class="bi bi-calendar-check"></i> View My Timetable</button>
         </form>
 

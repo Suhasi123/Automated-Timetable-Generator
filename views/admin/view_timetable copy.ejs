@@ -30,12 +30,12 @@
 <body>
 <div class="dashboard-container">
     <!-- Sidebar Navigation -->
-    <%- include("includes/admin_sidebar.ejs") %>
+    <%- include("../includes/admin_sidebar.ejs") %>
 
     <!-- Main Content -->
     <div class="content">
         
-        <form method="GET" action="/timetable">
+        <form method="GET" action="/admin/timetable">
             <!-- onsubmit="return confirm('Are you sure you want to Regenerate this Timetable?');" -->
             <button class="btn btn-primary mb-3"><i class="bi bi-arrow-clockwise"></i> Regenerate Timetable</button>
         </form>
@@ -69,25 +69,51 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <% count=0 %>
+                        <% let count = 0; %>
+                        <% let merged = {}; %> <!-- Track merged cells -->
+                
                         <% for (let pd = 1; pd <= periodTimings.length; pd++) { %>
-                            <% period = pd-count %>
+                            <% let period = pd - count; %>
                             <tr>
-                                <% if (periodTimings[pd-1].includes("Break")) { %>
-                                    <% count++ %>
-                                    <th colspan="6" style="text-align: center; background-color: lightgray;"><%= periodTimings[pd-1] %></th>
+                                <% if (periodTimings[pd - 1].includes("Break")) { %>
+                                    <% count++; %>
+                                    <th colspan="6" style="text-align: center; background-color: lightgray;"><%= periodTimings[pd - 1] %></th>
                                 <% } else { %>
-                                    <th><%= periodTimings[pd-1] %></th>
+                                    <th><%= periodTimings[pd - 1] %></th>
+                
                                     <% ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].forEach(day => { %>
-                                        <td>
-                                            <% if (timetableByClass[class_id].timetable[period] && timetableByClass[class_id].timetable[period][day]) { %>
-                                                <%= timetableByClass[class_id].timetable[period][day].subject_name %><br>
-                                                <%= timetableByClass[class_id].timetable[period][day].teacher_name %><br>
-                                                <%= timetableByClass[class_id].timetable[period][day].room_name %>
-                                            <% } else { %>
-                                                -
-                                            <% } %>
-                                        </td>
+                                        <% 
+                                            let key = `${period}-${day}`;
+                                            if (merged[key]) return;
+                
+                                            let current = timetableByClass[class_id].timetable[period]?.[day];
+                                            let next = timetableByClass[class_id].timetable[period + 1]?.[day];
+                
+                                            let isDoublePeriod = current &&
+                                                next &&
+                                                current.subject_name === next.subject_name &&
+                                                current.teacher_name === next.teacher_name &&
+                                                current.room_name === next.room_name;
+                                        %>
+                
+                                        <% if (isDoublePeriod) { %>
+                                            <td rowspan="2">
+                                                <%= current.subject_name %><br>
+                                                <%= current.teacher_name %><br>
+                                                <%= current.room_name %>
+                                            </td>
+                                            <% merged[`${period + 1}-${day}`] = true; %>
+                                        <% } else { %>
+                                            <td>
+                                                <% if (current) { %>
+                                                    <%= current.subject_name %><br>
+                                                    <%= current.teacher_name %><br>
+                                                    <%= current.room_name %>
+                                                <% } else { %>
+                                                    -
+                                                <% } %>
+                                            </td>
+                                        <% } %>
                                     <% }); %>
                                 <% } %>
                             </tr>
@@ -95,8 +121,9 @@
                     </tbody>
                 </table>
                 
+                
 
-                <!-- Download PDF Button -->
+                
                 <div class="text-center">
                     <button class="btn btn-success" onclick="downloadPDF('<%= class_id %>')">
                         <i class="bi bi-file-earmark-pdf"></i> Download PDF
@@ -197,7 +224,7 @@
             return;
         }
 
-        fetch('/timetable/save', {
+        fetch('/admin/timetable/save', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(timetableByClass)

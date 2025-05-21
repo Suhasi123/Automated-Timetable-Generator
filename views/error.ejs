@@ -1,0 +1,57 @@
+<% layout("/layouts/boilerplate.ejs") %>
+
+<style>
+    /* body {
+        font-family: Arial, sans-serif;
+        background-color: #f8f8f8;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+    } */
+    .error{
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 500px;
+    }
+    .error-container {
+        background-color: white;
+        border-radius: 8px;
+        width:400px;
+        height: 250px;
+        padding: 30px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        text-align: center;
+    }
+    #errorH1 {
+        color: #e74c3c;
+    }
+    #errorP {
+        margin-top: 10px;
+        color: #333;
+    }
+    #errorA {
+        display: inline-block;
+        margin-top: 20px;
+        text-decoration: none;
+        color: white;
+        background-color: #3498db;
+        padding: 10px 20px;
+        border-radius: 5px;
+    }
+    #errorA:hover {
+        background-color: #2980b9;
+    }
+</style>
+
+<body>
+    <div class="error">
+    <div class="error-container">
+        <h1 id="errorH1">⚠️ Access Denied</h1>
+        <p id="errorP"><%= message || "You are not authorized to view this page." %></p>
+        <a href="/login" id="errorA">Go to Login</a>
+    </div>
+</div>
+</body>

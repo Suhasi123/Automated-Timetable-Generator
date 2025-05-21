@@ -1,0 +1,303 @@
+<%
+// Function to convert period ID to lecture index (excluding breaks)
+function getLectureIndex(id) {
+    let lectureIndex = 0;
+    for (let i = 0; i < periodTimings.length; i++) {
+        if (!periodTimings[i].is_break) {
+            lectureIndex++;
+        }
+        if (periodTimings[i].id === id) {
+            return lectureIndex; // stop and return current lecture index
+        }
+    }
+    return -1; // if not found
+}
+%>
+<% layout("/layouts/boilerplate.ejs") %>
+<style>
+    table {
+        width: 85%;
+        text-align: center;
+        margin: 20px auto;
+    }
+    th, td {
+        border: 1px solid black; 
+        text-align: center; 
+        vertical-align: middle;
+        padding: 10px; 
+        min-width: 120px;
+        height: 50px;
+        word-wrap: break-word;
+    }
+    th {
+        background-color: #f2f2f2;
+        font-weight: bold;
+    }
+    .timetable-container {
+        margin-bottom: 30px;
+    }
+    .center-button {
+        text-align: center;
+        margin-top: 20px;
+    }
+</style>
+
+<body>
+<div class="dashboard-container">
+    
+    <%- include("../includes/admin_sidebar.ejs") %>
+
+    <div class="content">
+        <h2 class="text-center mb-4" style="color: black;"><i class="bi bi-calendar-week"></i> Teacher Timetables</h2>
+
+       
+        <div class="text-center mb-4">
+            <label for="teacherSelect" class="fw-bold"><i class="bi bi-funnel"></i> Filter by Teacher:</label>
+            <select id="teacherSelect" class="form-select w-auto d-inline-block" onchange="filterTimetable()">
+                <option value="all">Show All</option>
+                <% for (let tid in teacherTimetables) { %>
+                    <option value="<%= tid %>"><%= teacherTimetables[tid].teacher_name %></option>
+                <% } %>
+            </select>
+        </div>
+
+        <% Object.keys(teacherTimetables).forEach(tid => { %>
+            <% let teacher = teacherTimetables[tid]; %>
+            <div id="timetable_<%= tid %>" class="timetable-container border rounded p-3 mb-4 shadow-sm bg-light">
+                <h3 style="text-align: center;"><%= teacher.teacher_name %>'s Timetable</h3>
+                <table id="timetableTable_<%= tid %>">
+                    <thead>
+                        <tr>
+                            <th>Time / Day</th>
+                            <th>Monday</th>
+                            <th>Tuesday</th>
+                            <th>Wednesday</th>
+                            <th>Thursday</th>
+                            <th>Friday</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% let merged = {}; %>
+                        <% 
+                            // Loop through periodTimings which is now an array of objects 
+                            for (let pd = 0; pd < periodTimings.length; pd++) {
+                                let periodObj = periodTimings[pd];
+                                let label = `${formatTime(periodObj.start_time)} - ${formatTime(periodObj.end_time)}`;
+                                let isBreak = periodObj.is_break;
+
+                                // You will need a way to map periodObj.id to your timetable's period index
+                                // Assuming getLectureIndex is a helper function you have that does this mapping:
+                                let currentLecture = getLectureIndex(periodObj.id);
+
+                                // Next period data
+                                let nextPeriod = periodTimings[pd + 1];
+                                let nextLecture = nextPeriod ? getLectureIndex(nextPeriod.id) : null;
+
+                                let canMerge = nextPeriod && !nextPeriod.is_break;
+                        %>
+
+                        <% if (isBreak) { %>
+                            <tr>
+                                <th colspan="6" style="text-align: center; background-color: lightgray;">
+                                    <%= label %> (Break)
+                                </th>
+                            </tr>
+                        <% } else { %>
+                            <tr>
+                                <th><%= label %></th>
+                                <% ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].forEach(day => { 
+                                    let key = `${currentLecture}-${day}`;
+                                    if (merged[key]) return;
+
+                                    // Access timetable data for this class (tid), period, and day
+                                    let current = teacherTimetables[tid].timetable[currentLecture]?.[day];
+                                    let next = (canMerge && nextLecture !== null)
+                                        ? teacherTimetables[tid].timetable[nextLecture]?.[day]
+                                        : null;
+
+                                    // Double period check: same subject, class, room
+                                    let isDoublePeriod = canMerge && current && next &&
+                                        current.subject_name === next.subject_name &&
+                                        current.class_name === next.class_name &&
+                                        current.room_name === next.room_name;
+                                %>
+                                    <% if (isDoublePeriod) { %>
+                                        <td rowspan="2" style="vertical-align: middle;">
+                                            <b><%= current.subject_name %></b><br>
+                                            Class: <%= current.class_name %><br>
+                                            Room: <%= current.room_name %>
+                                        </td>
+                                        <% merged[`${nextLecture}-${day}`] = true; %>
+                                    <% } else { %>
+                                        <td>
+                                            <% if (current) { %>
+                                                <b><%= current.subject_name %></b><br>
+                                                Class: <%= current.class_name %><br>
+                                                Room: <%= current.room_name %>
+                                            <% } else { %>
+                                                -
+                                            <% } %>
+                                        </td>
+                                    <% } %>
+                                <% }); %>
+                            </tr>
+                        <% } %>
+
+                        <% } %>
+                    </tbody>
+                </table>
+
+                <div class="text-center">
+                    <button class="btn btn-success" onclick="downloadPDF('<%= tid %>')">
+                        <i class="bi bi-file-earmark-pdf"></i> Download PDF
+                    </button>
+                </div>
+            </div>
+        <% }); %>
+        
+        <!-- Save All Timetables Button -->
+        <!-- <div class="center-button">
+            <button class="btn btn-primary" onclick="saveAllTeacherTimetables()">
+                <i class="bi bi-save"></i> Save All Timetables
+            </button>
+        </div> -->
+    </div>
+</div>
+
+<script>
+    const teacherTimetables = <%- JSON.stringify(teacherTimetables) %>;
+    const periodTimings = <%- JSON.stringify(periodTimings) %>;
+
+    function filterTimetable() {
+        let selected = document.getElementById("teacherSelect").value;
+
+        document.querySelectorAll(".timetable-container").forEach(div => {
+            div.style.display = (selected === "all" || div.id === "timetable_" + selected) ? "block" : "none";
+        });
+    }
+
+    function downloadPDF(classId) {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({
+            orientation: "landscape",
+            unit: "mm",
+            format: "a4"
+        });
+        const timetableContainer = document.querySelector(`#timetable_${classId}`);
+        if (!timetableContainer) {
+            alert("Timetable not found!");
+            return;
+        }
+        const className = timetableContainer.querySelector("h3")?.innerText.replace(" Timetable", "").trim() || `Class_${classId}`;
+        doc.setFontSize(18);
+        doc.text(`Timetable for ${className}`, 148.5, 15, { align: "center" });
+
+        const table = timetableContainer.querySelector("table");
+        if (!table) {
+            alert("Timetable table not found!");
+            return;
+        }
+
+        const headers = [];
+        table.querySelectorAll("thead tr th").forEach((th, index) => {
+            headers.push({
+                content: th.innerText.trim(),
+                styles: {
+                    halign: "center",
+                    fillColor: [100, 150, 255], // Header row color
+                    textColor: 255,
+                    fontStyle: "bold"
+                }
+            });
+        });
+
+        const body = [];
+        table.querySelectorAll("tbody tr").forEach(tr => {
+            const row = [];
+            const cells = Array.from(tr.children);
+            if (cells.length === 1 && cells[0].hasAttribute("colspan")) {
+                row.push({
+                    content: cells[0].innerText.trim(),
+                    colSpan: headers.length,
+                    styles: {
+                        halign: "center",
+                        fontStyle: "bold",
+                        fillColor: [220, 220, 220]
+                    }
+                });
+            } else {
+                cells.forEach((cell, index) => {
+                    const cellData = {
+                        content: cell.innerText.trim(),
+                        styles: {
+                            halign: "center"
+                        }
+                    };
+
+                    if (index === 0) {
+                        cellData.styles.fillColor = [230, 230, 250]; // Light lavender
+                        cellData.styles.fontStyle = "bold";
+                    }
+                    if (cell.hasAttribute("colspan")) {
+                        cellData.colSpan = parseInt(cell.getAttribute("colspan"));
+                    }
+                    if (cell.hasAttribute("rowspan")) {
+                        cellData.rowSpan = parseInt(cell.getAttribute("rowspan"));
+                    }
+                    row.push(cellData);
+                });
+            }
+
+            body.push(row);
+        });
+
+        doc.autoTable({
+            head: [headers],
+            body: body,
+            startY: 25,
+            theme: 'grid',
+            styles: {
+                fontSize: 10,
+                cellPadding: 4,
+                valign: "middle",
+                halign: "center"
+            },
+            didParseCell: function (data) {
+                // No-op: we manually style first column & header already
+            }
+        });
+
+        doc.save(`${className}-Timetable.pdf`);
+    }
+
+    function saveAllTeacherTimetables() {
+        if (!teacherTimetables || Object.keys(teacherTimetables).length === 0) {
+            alert("No teacher timetable data found.");
+            return;
+        }
+
+        fetch('/timetable/save-teachers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(teacherTimetables)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert("All teacher timetables saved successfully!");
+            } else {
+                alert("Error: " + data.message);
+            }
+        })
+        .catch(error => {
+            console.error("Fetch Error:", error);
+            alert("Error saving teacher timetables.");
+        });
+    }
+</script>
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
