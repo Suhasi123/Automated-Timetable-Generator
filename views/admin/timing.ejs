@@ -1,63 +1,43 @@
 
 <% layout("/layouts/boilerplate.ejs") %>
-<body>
-    <div class="dashboard-container">
-        <!-- Sidebar Navigation -->
-        <%- include("../includes/admin_sidebar.ejs") %>
-        
-        <!-- Main Content -->
-        <div class="content">
-            <h1>Timing Details</h1>
+<body> 
+<div class="dashboard-container">
+    <%- include("../includes/admin_sidebar.ejs") %>
+
+    <div class="content">
+        <h1>Timing Details</h1>
         <p>Manage period and break timings for the timetable.</p>
 
-        <!-- Timing Form -->
         <form id="timingForm" method="POST" action="/admin/timing" class="border p-4 rounded shadow-sm bg-light">
             <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label"><i class="fa-regular fa-clock"></i><b> Period 1</b></label>
-                    <input type="text" class="form-control" name="period1" value="<%= periodTimings[0] %>" required>
-                </div>
-
-                <div class="col-md-6">
-                    <label class="form-label"><i class="fa-regular fa-clock"></i><b>Period 2</b></label>
-                    <input type="text" class="form-control" name="period2" value="<%= periodTimings[1] %>" required>
-                </div>
-
-                <div class="col-md-6">
-                    <label class="form-label"><i class="fa-solid fa-mug-saucer"></i><b> Break</b></label>
-                    <input type="text" class="form-control" name="break1" value="<%= periodTimings[2] %>" required>
-                </div>
-
-                <div class="col-md-6">
-                    <label class="form-label"><i class="fa-regular fa-clock"></i><b> Period 3</b></label>
-                    <input type="text" class="form-control" name="period3" value="<%= periodTimings[3] %>" required>
-                </div>
-
-                <div class="col-md-6">
-                    <label class="form-label"><i class="fa-regular fa-clock"></i><b> Period 4</b></label>
-                    <input type="text" class="form-control" name="period4" value="<%= periodTimings[4] %>" required>
-                </div>
-
-                <div class="col-md-6">
-                    <label class="form-label"><i class="fa-solid fa-mug-saucer"></i><b> Break</b></label>
-                    <input type="text" class="form-control" name="break2" value="<%= periodTimings[5] %>" required>
-                </div>
-
-                <div class="col-md-6">
-                    <label class="form-label"><i class="fa-regular fa-clock"></i><b> Period 5</b></label>
-                    <input type="text" class="form-control" name="period5" value="<%= periodTimings[6] %>" required>
-                </div>
-
-                <div class="col-md-6">
-                    <label class="form-label"><i class="fa-regular fa-clock"></i><b> Period 6</b></label>
-                    <input type="text" class="form-control" name="period6" value="<%= periodTimings[7] %>" required>
-                </div>
+                <% periodTimings.forEach(function(timing) { %>
+                    <div class="col-md-6">
+                        <label class="form-label">
+                            <% if (timing.is_break) { %>
+                                <i class="fa-solid fa-mug-saucer"></i>
+                                <b>Break <%= timing.period_number %></b>
+                            <% } else { %>
+                                <i class="fa-regular fa-clock"></i>
+                                <b>Period <%= timing.period_number %></b>
+                            <% } %>
+                        </label>
+                        <input type="text" class="form-control"
+                            name="<%= timing.is_break ? `break_${timing.period_number}` : `period_${timing.period_number}` %>"
+                            value="<%= timing.start_time + ' - ' + timing.end_time %>" required>
+                    </div>
+                <% }); %>
             </div>
-
             <div class="mt-4">
                 <button type="submit" class="btn btn-success"><i class="bi bi-check-circle"></i> Save Timings</button>
             </div>
         </form>
     </div>
 </div>
-    </body>
+</body>
+<script>
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('saved') === 'true') {
+        alert("Timings saved successfully!");
+        window.history.replaceState(null, null, window.location.pathname);
+    }
+</script>

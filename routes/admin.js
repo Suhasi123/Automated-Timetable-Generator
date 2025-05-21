@@ -515,21 +515,64 @@ router.delete("/teacher/:teacher_id/delete", authMiddleware("admin"), (req, res)
 //     "2:15 PM - 3:15 PM",
 // ];
 
-router.get("/timing", authMiddleware("admin"), (req, res)=>{
-    let sql = "SELECT * FROM period_timings ORDER BY id";
-    connection.query(sql, (err, periodTimings)=>{
-        if(err) throw(err);
-        res.render("admin/timing.ejs", {periodTimings});
+// router.get("/timing", authMiddleware("admin"), (req, res)=>{
+//     let sql = "SELECT * FROM period_timings ORDER BY id";
+//     connection.query(sql, (err, periodTimings)=>{
+//         if(err) throw(err);
+//         res.render("admin/timing.ejs", {periodTimings});
+//     });
+//     //res.render("admin/timing.ejs", {periodTimings});
+// });
+
+// router.post("/timing", authMiddleware("admin"), (req, res)=>{
+//     let {period1, period2, break1, period3, period4, break2, period5, period6} = req.body;
+//     periodTimings = [
+//         period1, period2, break1, period3, period4, break2, period5, period6
+//     ];
+//     res.redirect("/admin/timing");
+// });
+
+// GET route to fetch and render timings
+router.get("/timing", authMiddleware("admin"), (req, res) => {
+    const sql = "SELECT * FROM period_timings ORDER BY id";
+    connection.query(sql, (err, periodTimings) => {
+        if (err) throw err;
+        //console.log(periodTimings);
+        res.render("admin/timing.ejs", { periodTimings });
     });
-    //res.render("admin/timing.ejs", {periodTimings});
 });
 
-router.post("/timing", authMiddleware("admin"), (req, res)=>{
-    let {period1, period2, break1, period3, period4, break2, period5, period6} = req.body;
-    periodTimings = [
-        period1, period2, break1, period3, period4, break2, period5, period6
-    ];
-    res.redirect("/admin/timing");
+
+// POST route to update all period timings
+router.post("/timing", authMiddleware("admin"), (req, res) => {
+    const timings = req.body; // { period_1: '08:15:00 - 09:15:00', break_3: '10:15:00 - 10:30:00', ... }
+    //console.log(timings);
+
+    const entries = Object.entries(timings); // [[label, time], ...]
+
+    const updatePromises = entries.map(([label, time]) => {
+        return new Promise((resolve, reject) => {
+            const [type, number] = label.split("_"); // 'period_1' -> ['period', '1']
+            const [start_time, end_time] = time.split(" - ");
+            const period_number = parseInt(number);
+            const is_break = type === "break" ? 1 : 0;
+
+            const sql = "UPDATE period_timings SET start_time = ?, end_time = ? WHERE period_number = ? AND is_break = ?";
+            const values = [start_time.trim(), end_time.trim(), period_number, is_break];
+
+            connection.query(sql, values, (err, result) => {
+                if (err) return reject(err);
+                resolve(result);
+            });
+        });
+    });
+
+    Promise.all(updatePromises)
+        .then(() => res.redirect("/admin/timing?saved=true"))
+        .catch((err) => {
+            console.error(err);
+            res.send("Error updating timings");
+        });
 });
 
 const fetchInputData = async () => {
@@ -892,7 +935,7 @@ router.get("/timetable/saved", authMiddleware("admin"), (req, res) => {
             } catch (error) {
                 console.error(" Error parsing timetable JSON:", error);
                 parsedData = {};
-            }
+            } 
 
             return {
                 id: row.id,
