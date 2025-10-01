@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-
+const bcrypt = require("bcryptjs");
 const mysql = require("mysql2");
 const connection = mysql.createConnection({
     host : 'localhost',
@@ -180,9 +180,13 @@ router.delete("/delete-user/:id", authMiddleware("admin"), (req, res) => {
     });
 });
 
+// GET - Display all classes with their batches
 router.get("/class", authMiddleware("admin"), (req, res) => {
     let q1 = "SELECT count(*) FROM classes";
-    let q2 = "SELECT * FROM classes ORDER BY class_id ASC";
+    let q2 = `SELECT c.*, b.batch_id, b.batch_name 
+              FROM classes c 
+              LEFT JOIN batches b ON c.class_id = b.class_id 
+              ORDER BY c.class_id ASC, b.batch_id ASC`;
 
     connection.query(q1, (err, countResult) => {
         if (err) {
@@ -191,57 +195,173 @@ router.get("/class", authMiddleware("admin"), (req, res) => {
         }
         let count = countResult[0]["count(*)"];
 
-        connection.query(q2, (err, classesResult) => {
+        connection.query(q2, (err, results) => {
             if (err) {
                 console.log(err);
                 return res.send("Some error in database");
             }
-            res.render("admin/class.ejs", { count, classes: classesResult });
+
+            // Group batches by class
+            const classesMap = {};
+            results.forEach(row => {
+                if (!classesMap[row.class_id]) {
+                    classesMap[row.class_id] = {
+                        class_id: row.class_id,
+                        class_name: row.class_name,
+                        batches: []
+                    };
+                }
+                
+                // Add batch if it exists
+                if (row.batch_id) {
+                    classesMap[row.class_id].batches.push({
+                        batch_id: row.batch_id,
+                        batch_name: row.batch_name
+                    });
+                }
+            });
+
+            const classes = Object.values(classesMap);
+            res.render("admin/class.ejs", { count, classes });
         });
     });
 });
 
-router.post('/class/new', authMiddleware("admin"), (req,res)=>{
-    let {class_name} = req.body; 
-    let q=`INSERT INTO classes (class_name) VALUES ('${class_name}')`;
-    try{
-        connection.query(q, (err, result) => {
-            if(err) throw err;
+// POST - Create new class with optional batches
+router.post('/class/new', authMiddleware("admin"), (req, res) => {
+    const { class_name, batch_names } = req.body;
+
+    // Insert class first
+    const insertClassQuery = "INSERT INTO classes (class_name) VALUES (?)";
+    
+    connection.query(insertClassQuery, [class_name], (err, result) => {
+        if (err) {
+            console.log(err);
+            return res.send("Error creating class");
+        }
+
+        const class_id = result.insertId;
+
+        // If there are batches, insert them
+        if (batch_names && Array.isArray(batch_names) && batch_names.length > 0) {
+            // Filter out empty batch names
+            const validBatches = batch_names.filter(name => name && name.trim() !== '');
+            
+            if (validBatches.length > 0) {
+                const batchValues = validBatches.map(batch_name => {
+                    const batch_id = `${class_id}_${batch_name.trim().replace(/\s+/g, '_').toUpperCase()}`;
+                    return [batch_id, class_id, batch_name.trim()];
+                });
+
+                const insertBatchesQuery = "INSERT INTO batches (batch_id, class_id, batch_name) VALUES ?";
+                
+                connection.query(insertBatchesQuery, [batchValues], (err) => {
+                    if (err) {
+                        console.log("Error inserting batches:", err);
+                        // Class is created but batches failed - you might want to rollback
+                    }
+                    res.redirect('/admin/class');
+                });
+            } else {
+                res.redirect('/admin/class');
+            }
+        } else {
             res.redirect('/admin/class');
-        });
-    }catch{
-        console.log(err);
-        res.send("some error in database");
-    }
+        }
+    });
 });
 
-router.patch("/class/:class_id", authMiddleware("admin"), (req, res)=>{
-    let {class_id} = req.params;
-    let {class_name: new_class_name} = req.body;
-    let q = `UPDATE classes SET class_name='${new_class_name}' WHERE class_id=${class_id}`;
-    try{
-        connection.query(q, (err, result)=>{
-            if(err) throw(err);
-            res.redirect("/admin/class");
-        });
-    }catch{
-        console.log(err);
-        res.send("some error in database");
-    }
+// PATCH - Update class and its batches
+router.patch("/class/:class_id", authMiddleware("admin"), (req, res) => {
+    const { class_id } = req.params;
+    const { class_name, batch_names, batch_ids } = req.body;
+
+    // Update class name
+    const updateClassQuery = "UPDATE classes SET class_name = ? WHERE class_id = ?";
+    
+    connection.query(updateClassQuery, [class_name, class_id], (err) => {
+        if (err) {
+            console.log(err);
+            return res.send("Error updating class");
+        }
+
+        // Handle batches
+        if (batch_names && Array.isArray(batch_names) && batch_names.length > 0) {
+            // Filter out empty batch names
+            const validBatches = batch_names.filter(name => name && name.trim() !== '');
+            
+            if (validBatches.length > 0) {
+                // First, delete all existing batches for this class
+                const deleteBatchesQuery = "DELETE FROM batches WHERE class_id = ?";
+                
+                connection.query(deleteBatchesQuery, [class_id], (err) => {
+                    if (err) {
+                        console.log("Error deleting old batches:", err);
+                        return res.redirect('/admin/class');
+                    }
+
+                    // Insert new/updated batches
+                    const batchValues = validBatches.map((batch_name, index) => {
+                        // Use existing batch_id if available, otherwise create new one
+                        let batch_id;
+                        if (batch_ids && batch_ids[index]) {
+                            batch_id = batch_ids[index];
+                        } else {
+                            batch_id = `${class_id}_${batch_name.trim().replace(/\s+/g, '_').toUpperCase()}`;
+                        }
+                        return [batch_id, class_id, batch_name.trim()];
+                    });
+
+                    const insertBatchesQuery = "INSERT INTO batches (batch_id, class_id, batch_name) VALUES ?";
+                    
+                    connection.query(insertBatchesQuery, [batchValues], (err) => {
+                        if (err) {
+                            console.log("Error inserting batches:", err);
+                        }
+                        res.redirect('/admin/class');
+                    });
+                });
+            } else {
+                // No valid batches - delete all existing batches
+                const deleteBatchesQuery = "DELETE FROM batches WHERE class_id = ?";
+                connection.query(deleteBatchesQuery, [class_id], () => {
+                    res.redirect('/admin/class');
+                });
+            }
+        } else {
+            // No batches provided - delete all existing batches
+            const deleteBatchesQuery = "DELETE FROM batches WHERE class_id = ?";
+            connection.query(deleteBatchesQuery, [class_id], () => {
+                res.redirect('/admin/class');
+            });
+        }
+    });
 });
 
-router.delete("/class/:class_id/delete", authMiddleware("admin"), (req, res)=>{
-    let {class_id} = req.params;
-    let q = `DELETE FROM classes WHERE class_id='${class_id}'`;
-    try{
-        connection.query(q, (err, result) => {
-            if(err) throw err;
+// DELETE - Delete class and its batches (CASCADE should handle batches)
+router.delete("/class/:class_id/delete", authMiddleware("admin"), (req, res) => {
+    const { class_id } = req.params;
+    
+    // Delete batches first (if CASCADE is not set)
+    const deleteBatchesQuery = "DELETE FROM batches WHERE class_id = ?";
+    
+    connection.query(deleteBatchesQuery, [class_id], (err) => {
+        if (err) {
+            console.log("Error deleting batches:", err);
+            return res.send("Error deleting class batches");
+        }
+
+        // Then delete the class
+        const deleteClassQuery = "DELETE FROM classes WHERE class_id = ?";
+        
+        connection.query(deleteClassQuery, [class_id], (err) => {
+            if (err) {
+                console.log(err);
+                return res.send("Error deleting class");
+            }
             res.redirect("/admin/class");
-        }); 
-    }catch{
-        console.log(err);
-        res.send("some error in database");
-    }
+        });
+    });
 });
 
 router.get("/room", authMiddleware("admin"), (req, res) => {
@@ -307,94 +427,243 @@ router.delete("/room/:room_id/delete", authMiddleware("admin"), (req, res)=>{
         res.send("some error in database");
     }
 });
-
+// GET - Display all subjects with batch information
 router.get("/subject", authMiddleware("admin"), (req, res) => {
-    let q1 = "SELECT count(*) FROM subjects";
+    let q1 = "SELECT count(DISTINCT subject_name, class_id) as count FROM subjects";
     let q2 = `
-        SELECT s.*, c.class_name 
+        SELECT s.*, c.class_name, b.batch_name
         FROM subjects s
         LEFT JOIN classes c ON s.class_id = c.class_id
-        ORDER BY s.subject_id
+        LEFT JOIN batches b ON s.batch_id = b.batch_id
+        ORDER BY s.class_id, s.subject_name, s.batch_id
     `;
-    let q3 = "SELECT class_id, class_name FROM classes ORDER BY class_id"
+    let q3 = `
+        SELECT c.class_id, c.class_name, b.batch_id, b.batch_name
+        FROM classes c
+        LEFT JOIN batches b ON c.class_id = b.class_id
+        ORDER BY c.class_id, b.batch_name
+    `;
 
     connection.query(q1, (err, countResult) => {
         if (err) {
             console.log(err);
             return res.send("Some error in database");
         }
-        let count = countResult[0]["count(*)"];
+        let count = countResult[0].count;
 
         connection.query(q2, (err, subjectsResult) => {
             if (err) {
                 console.log(err);
                 return res.send("Some error in database");
             }
-            connection.query(q3, (err, results) => {
+
+            connection.query(q3, (err, classResults) => {
                 if (err) {
                     console.error(err);
-                    return res.send("Error fetching subjects");
+                    return res.send("Error fetching classes");
                 }
-                res.render("admin/subject.ejs", { count, subjects: subjectsResult,classes: results });
+
+                // Group classes with their batches
+                const classesMap = {};
+                classResults.forEach(row => {
+                    if (!classesMap[row.class_id]) {
+                        classesMap[row.class_id] = {
+                            class_id: row.class_id,
+                            class_name: row.class_name,
+                            batches: []
+                        };
+                    }
+                    if (row.batch_id) {
+                        classesMap[row.class_id].batches.push({
+                            batch_id: row.batch_id,
+                            batch_name: row.batch_name
+                        });
+                    }
+                });
+
+                const classes = Object.values(classesMap);
+                res.render("admin/subject.ejs", { 
+                    count, 
+                    subjects: subjectsResult, 
+                    classes 
+                });
             });
         });
     });
 });
 
-router.post('/subject/new', authMiddleware("admin"), (req,res)=>{
-    let {subject_name, max_allocations, class_id, duration} = req.body; 
-    let q=`INSERT INTO subjects (subject_name, max_allocations, class_id, duration) VALUES ('${subject_name}', ${max_allocations}, ${class_id}, ${duration})`;
-    try{
-        connection.query(q, (err, result) => {
-            if(err) throw err;
-            res.redirect('/admin/subject');
-        });
-    }catch{
-        console.log(err);
-        res.send("some error in database");
+// POST - Create new subject (creates for all batches only if user checks the option)
+router.post('/subject/new', authMiddleware("admin"), async (req, res) => {
+    const { subject_name, max_allocations, class_id, duration, is_batch_specific } = req.body;
+
+    try {
+        // Check if user wants batch-specific subject
+        if (is_batch_specific === 'on') {
+            // Get batches for this class
+            const batches = await new Promise((resolve, reject) => {
+                connection.query(
+                    "SELECT batch_id FROM batches WHERE class_id = ?",
+                    [class_id],
+                    (err, results) => {
+                        if (err) reject(err);
+                        else resolve(results);
+                    }
+                );
+            });
+
+            if (batches.length > 0) {
+                // Create subject for each batch
+                const insertPromises = batches.map(batch => {
+                    return new Promise((resolve, reject) => {
+                        connection.query(
+                            "INSERT INTO subjects (subject_name, max_allocations, class_id, duration, batch_id) VALUES (?, ?, ?, ?, ?)",
+                            [subject_name, max_allocations, class_id, duration, batch.batch_id],
+                            (err, result) => {
+                                if (err) reject(err);
+                                else resolve(result);
+                            }
+                        );
+                    });
+                });
+
+                await Promise.all(insertPromises);
+                console.log(`Created batch-specific subject "${subject_name}" for ${batches.length} batches in class ${class_id}`);
+            } else {
+                // No batches found, create single subject
+                await new Promise((resolve, reject) => {
+                    connection.query(
+                        "INSERT INTO subjects (subject_name, max_allocations, class_id, duration, batch_id) VALUES (?, ?, ?, ?, NULL)",
+                        [subject_name, max_allocations, class_id, duration],
+                        (err, result) => {
+                            if (err) reject(err);
+                            else resolve(result);
+                        }
+                    );
+                });
+                console.log(`Created subject "${subject_name}" for class ${class_id} (no batches found)`);
+            }
+        } else {
+            // User doesn't want batch-specific - create single subject with batch_id = NULL
+            await new Promise((resolve, reject) => {
+                connection.query(
+                    "INSERT INTO subjects (subject_name, max_allocations, class_id, duration, batch_id) VALUES (?, ?, ?, ?, NULL)",
+                    [subject_name, max_allocations, class_id, duration],
+                    (err, result) => {
+                        if (err) reject(err);
+                        else resolve(result);
+                    }
+                );
+            });
+            console.log(`Created class-wide subject "${subject_name}" for class ${class_id} (not batch-specific)`);
+        }
+
+        res.redirect('/admin/subject');
+    } catch (err) {
+        console.error("Error creating subject:", err);
+        res.send("Error creating subject");
     }
 });
 
-router.patch("/subject/:subject_id", authMiddleware("admin"), (req, res)=>{
-    let {subject_id} = req.params;
-    let {subject_name: new_subject_name, max_allocations: new_max_allocations, class_id: new_class_id, duration: new_duration} = req.body;
-    let q = `UPDATE subjects SET subject_name='${new_subject_name}', max_allocations='${new_max_allocations}', class_id='${new_class_id}', duration='${new_duration}' WHERE subject_id=${subject_id}`;
-    try{
-        connection.query(q, (err, result)=>{
-            if(err) throw(err);
+// PATCH - Update single subject (for non-batch subjects)
+router.patch("/subject/:subject_id", authMiddleware("admin"), (req, res) => {
+    const { subject_id } = req.params;
+    const { subject_name, max_allocations, class_id, duration } = req.body;
+
+    const query = `
+        UPDATE subjects 
+        SET subject_name = ?, max_allocations = ?, class_id = ?, duration = ?
+        WHERE subject_id = ?
+    `;
+
+    connection.query(
+        query,
+        [subject_name, max_allocations, class_id, duration, subject_id],
+        (err, result) => {
+            if (err) {
+                console.log(err);
+                return res.send("Error updating subject");
+            }
             res.redirect("/admin/subject");
-        });
-    }catch{
-        console.log(err);
-        res.send("some error in database");
-    }
+        }
+    );
 });
 
-router.delete("/subject/:subject_id/delete", authMiddleware("admin"), (req, res)=>{
-    let {subject_id} = req.params;
-    //let q1 = `DELETE FROM teachers WHERE subject_id='${subject_id}'`;
-    let q2 = `DELETE FROM subjects WHERE subject_id='${subject_id}'`;
-    try{
-        connection.query(q2, (err, result) => {
-            if(err) throw err;
+// PATCH - Update subject group (all batches at once)
+router.patch("/subject/group/:subject_name/:class_id", authMiddleware("admin"), (req, res) => {
+    const { subject_name: old_subject_name, class_id } = req.params;
+    const { subject_name: new_subject_name, max_allocations, duration } = req.body;
+
+    const query = `
+        UPDATE subjects 
+        SET subject_name = ?, max_allocations = ?, duration = ?
+        WHERE subject_name = ? AND class_id = ? AND batch_id IS NOT NULL
+    `;
+
+    connection.query(
+        query,
+        [new_subject_name, max_allocations, duration, old_subject_name, class_id],
+        (err, result) => {
+            if (err) {
+                console.log(err);
+                return res.send("Error updating subject group");
+            }
+            console.log(`Updated ${result.affectedRows} subjects in group`);
             res.redirect("/admin/subject");
-        }); 
-    }catch{
-        console.log(err);
-        res.send("some error in database");
-    }
+        }
+    );
+});
+
+// DELETE - Delete single subject
+router.delete("/subject/:subject_id/delete", authMiddleware("admin"), (req, res) => {
+    const { subject_id } = req.params;
+    
+    connection.query(
+        "DELETE FROM subjects WHERE subject_id = ?",
+        [subject_id],
+        (err, result) => {
+            if (err) {
+                console.log(err);
+                return res.send("Error deleting subject");
+            }
+            res.redirect("/admin/subject");
+        }
+    );
+});
+
+// DELETE - Delete subject group (all batches)
+router.delete("/subject/group/:subject_name/:class_id/delete", authMiddleware("admin"), (req, res) => {
+    const { subject_name, class_id } = req.params;
+    
+    connection.query(
+        "DELETE FROM subjects WHERE subject_name = ? AND class_id = ? AND batch_id IS NOT NULL",
+        [subject_name, class_id],
+        (err, result) => {
+            if (err) {
+                console.log(err);
+                return res.send("Error deleting subject group");
+            }
+            console.log(`Deleted ${result.affectedRows} subjects from group`);
+            res.redirect("/admin/subject");
+        }
+    );
 });
 
 router.get("/teacher", authMiddleware("admin"), (req, res) => {
     let q1 = "SELECT count(*) AS count FROM teachers";
+    
+    // Get all teachers with their subject details including batch info
     let q2 = `
         SELECT t.teacher_id, t.teacher_name, 
-               GROUP_CONCAT(s.subject_name ORDER BY s.subject_id SEPARATOR ', ') AS subjects
+               ts.subject_id,
+               s.subject_name, s.duration,
+               c.class_name,
+               b.batch_name
         FROM teachers t
         LEFT JOIN teacher_subjects ts ON t.teacher_id = ts.teacher_id
         LEFT JOIN subjects s ON ts.subject_id = s.subject_id
-        GROUP BY t.teacher_id, t.teacher_name
-        HAVING subjects IS NOT NULL
+        LEFT JOIN classes c ON s.class_id = c.class_id
+        LEFT JOIN batches b ON s.batch_id = b.batch_id
+        ORDER BY t.teacher_id, c.class_name, s.subject_name
     `;
 
     connection.query(q1, (err, countResult) => {
@@ -409,21 +678,64 @@ router.get("/teacher", authMiddleware("admin"), (req, res) => {
                 console.log(err);
                 return res.send("Some error in database");
             }
-            let q3 = "SELECT subject_id, subject_name, class_id FROM subjects ORDER BY subject_id";
+
+            // Group subjects by teacher
+            const teachersMap = {};
+            teachersResult.forEach(row => {
+                if (!teachersMap[row.teacher_id]) {
+                    teachersMap[row.teacher_id] = {
+                        teacher_id: row.teacher_id,
+                        teacher_name: row.teacher_name,
+                        subject_details: []
+                    };
+                }
+                
+                // Add subject details if they exist
+                if (row.subject_id) {
+                    teachersMap[row.teacher_id].subject_details.push({
+                        subject_id: row.subject_id,
+                        subject_name: row.subject_name,
+                        class_name: row.class_name,
+                        batch_name: row.batch_name,
+                        duration: row.duration
+                    });
+                }
+            });
+
+            const teachers = Object.values(teachersMap);
+
+            // Get all subjects with class and batch info for dropdown
+            let q3 = `
+                SELECT s.subject_id, s.subject_name, s.duration,
+                       c.class_name, 
+                       b.batch_name
+                FROM subjects s
+                LEFT JOIN classes c ON s.class_id = c.class_id
+                LEFT JOIN batches b ON s.batch_id = b.batch_id
+                ORDER BY c.class_name, s.subject_name, b.batch_name
+            `;
+            
             connection.query(q3, (err, subjectResults) => {
                 if (err) {
                     console.error(err);
                     return res.send("Error fetching subjects");
                 }
-                let q4 = "SELECT teacher_name FROM teachers";
+
+                // Get all teacher names for dropdown
+                let q4 = "SELECT DISTINCT teacher_name FROM teachers ORDER BY teacher_name";
                 connection.query(q4, (err, teacherRes) => {
                     if (err) {
                         console.error(err);
                         return res.send("Error fetching teachers");
                     }
-                    res.render("admin/teacher.ejs", { count, teachers: teachersResult, subjects: subjectResults, teacherInfo: teacherRes });
+                    
+                    res.render("admin/teacher.ejs", { 
+                        count, 
+                        teachers, 
+                        subjects: subjectResults, 
+                        teacherInfo: teacherRes 
+                    });
                 });
-                
             });
         });
     });
@@ -431,76 +743,162 @@ router.get("/teacher", authMiddleware("admin"), (req, res) => {
 
 // Function to insert into teacher_subjects
 function insertTeacherSubject(teacherId, subjectId, res) {
-    let insertMappingQuery = "INSERT INTO teacher_subjects (teacher_id, subject_id) VALUES (?, ?)";
-    connection.query(insertMappingQuery, [teacherId, subjectId], (err) => {
+    // Check if mapping already exists
+    let checkQuery = "SELECT * FROM teacher_subjects WHERE teacher_id = ? AND subject_id = ?";
+    connection.query(checkQuery, [teacherId, subjectId], (err, results) => {
         if (err) {
             console.error(err);
             return res.send("Some error in database");
         }
-        res.redirect('/admin/teacher');
+        
+        if (results.length > 0) {
+            // Mapping already exists
+            return res.redirect('/admin/teacher');
+        }
+        
+        // Insert new mapping
+        let insertMappingQuery = "INSERT INTO teacher_subjects (teacher_id, subject_id) VALUES (?, ?)";
+        connection.query(insertMappingQuery, [teacherId, subjectId], (err) => {
+            if (err) {
+                console.error(err);
+                return res.send("Some error in database");
+            }
+            res.redirect('/admin/teacher');
+        });
     });
 }
 
-router.post('/teacher/new', authMiddleware("admin"), (req, res) => {
-    let { teacher_name, subject_id } = req.body;
+router.post('/teacher/new', authMiddleware("admin"), async (req, res) => {
+    let { teacher_name, subject_ids } = req.body;
 
-    // Check if the teacher already exists
-    let checkTeacherQuery = "SELECT teacher_id FROM teachers WHERE teacher_name = ?";
-    connection.query(checkTeacherQuery, [teacher_name], (err, result) => {
-        if (err) {
-            console.error(err);
-            return res.send("Some error in database");
+    try {
+        // Ensure subject_ids is an array
+        if (!Array.isArray(subject_ids)) {
+            subject_ids = [subject_ids];
         }
 
-        let teacherId;
-        if (result.length > 0) {
-            // Teacher already exists, use the existing ID
-            teacherId = result[0].teacher_id;
-        } else {
-            // Insert new teacher
-            let insertTeacherQuery = "INSERT INTO teachers (teacher_name) VALUES (?)";
-            connection.query(insertTeacherQuery, [teacher_name], (err, insertResult) => {
-                if (err) {
-                    console.error(err);
-                    return res.send("Some error in database");
+        // Check if the teacher already exists
+        const teacherId = await new Promise((resolve, reject) => {
+            let checkTeacherQuery = "SELECT teacher_id FROM teachers WHERE teacher_name = ?";
+            connection.query(checkTeacherQuery, [teacher_name], (err, result) => {
+                if (err) return reject(err);
+                
+                if (result.length > 0) {
+                    // Teacher already exists
+                    resolve(result[0].teacher_id);
+                } else {
+                    // Insert new teacher
+                    let insertTeacherQuery = "INSERT INTO teachers (teacher_name) VALUES (?)";
+                    connection.query(insertTeacherQuery, [teacher_name], (err, insertResult) => {
+                        if (err) return reject(err);
+                        resolve(insertResult.insertId);
+                    });
                 }
-                teacherId = insertResult.insertId; // Get new teacher ID
-                insertTeacherSubject(teacherId, subject_id, res);
             });
-            return;
-        }
-        // If teacher exists, directly insert subject mapping
-        insertTeacherSubject(teacherId, subject_id, res);
-    });
-});
-
-router.patch("/teacher/:teacher_id", authMiddleware("admin"), (req, res)=>{
-    let {teacher_id} = req.params;
-    let {teacher_name: new_teacher_name} = req.body;
-    let q = `UPDATE teachers SET teacher_name='${new_teacher_name}' WHERE teacher_id=${teacher_id}`;
-    try{
-        connection.query(q, (err, result)=>{
-            if(err) throw(err);
-            res.redirect("/admin/teacher");
         });
-    }catch{
-        console.log(err);
-        res.send("some error in database");
+
+        // Insert all subject mappings
+        let successCount = 0;
+        let skipCount = 0;
+
+        for (const subject_id of subject_ids) {
+            // Check if mapping already exists
+            const exists = await new Promise((resolve, reject) => {
+                connection.query(
+                    "SELECT * FROM teacher_subjects WHERE teacher_id = ? AND subject_id = ?",
+                    [teacherId, subject_id],
+                    (err, results) => {
+                        if (err) return reject(err);
+                        resolve(results.length > 0);
+                    }
+                );
+            });
+
+            if (exists) {
+                skipCount++;
+                continue;
+            }
+
+            // Insert mapping
+            await new Promise((resolve, reject) => {
+                connection.query(
+                    "INSERT INTO teacher_subjects (teacher_id, subject_id) VALUES (?, ?)",
+                    [teacherId, subject_id],
+                    (err) => {
+                        if (err) return reject(err);
+                        successCount++;
+                        resolve();
+                    }
+                );
+            });
+        }
+
+        console.log(`Teacher assignment: ${successCount} subjects added, ${skipCount} already existed`);
+        res.redirect('/admin/teacher');
+
+    } catch (err) {
+        console.error("Error creating teacher assignments:", err);
+        res.send("Error creating teacher assignments");
     }
 });
 
-router.delete("/teacher/:teacher_id/delete", authMiddleware("admin"), (req, res) => {
-    let { teacher_id } = req.params;
+// Add subject to existing teacher
+router.post("/teacher/:teacher_id/add-subject", authMiddleware("admin"), (req, res) => {
+    const { teacher_id } = req.params;
+    const { subject_id } = req.body;
+    
+    insertTeacherSubject(teacher_id, subject_id, res);
+});
 
-    let deleteMappingQuery = "DELETE FROM teacher_subjects WHERE teacher_id = ?";
-    // let deleteTeacherQuery = "DELETE FROM teachers WHERE teacher_id = ?";
-
-    connection.query(deleteMappingQuery, [teacher_id], (err) => {
+// Remove specific subject from teacher
+router.delete("/teacher/remove-subject/:teacher_id/:subject_id", authMiddleware("admin"), (req, res) => {
+    const { teacher_id, subject_id } = req.params;
+    
+    let deleteQuery = "DELETE FROM teacher_subjects WHERE teacher_id = ? AND subject_id = ?";
+    connection.query(deleteQuery, [teacher_id, subject_id], (err) => {
         if (err) {
             console.error(err);
             return res.send("Some error in database");
         }
         res.redirect("/admin/teacher");
+    });
+});
+
+router.patch("/teacher/:teacher_id", authMiddleware("admin"), (req, res) => {
+    let { teacher_id } = req.params;
+    let { teacher_name } = req.body;
+    
+    let query = "UPDATE teachers SET teacher_name = ? WHERE teacher_id = ?";
+    connection.query(query, [teacher_name, teacher_id], (err, result) => {
+        if (err) {
+            console.log(err);
+            return res.send("some error in database");
+        }
+        res.redirect("/admin/teacher");
+    });
+});
+
+router.delete("/teacher/:teacher_id/delete", authMiddleware("admin"), (req, res) => {
+    let { teacher_id } = req.params;
+
+    // Delete all subject mappings for this teacher
+    let deleteMappingQuery = "DELETE FROM teacher_subjects WHERE teacher_id = ?";
+    
+    connection.query(deleteMappingQuery, [teacher_id], (err) => {
+        if (err) {
+            console.error(err);
+            return res.send("Some error in database");
+        }
+        
+        // Optionally, also delete the teacher record
+        let deleteTeacherQuery = "DELETE FROM teachers WHERE teacher_id = ?";
+        connection.query(deleteTeacherQuery, [teacher_id], (err) => {
+            if (err) {
+                console.error(err);
+                return res.send("Some error in database");
+            }
+            res.redirect("/admin/teacher");
+        });
     });
 });
 
@@ -514,23 +912,6 @@ router.delete("/teacher/:teacher_id/delete", authMiddleware("admin"), (req, res)
 //     "1:15 PM - 2:15 PM",
 //     "2:15 PM - 3:15 PM",
 // ];
-
-// router.get("/timing", authMiddleware("admin"), (req, res)=>{
-//     let sql = "SELECT * FROM period_timings ORDER BY id";
-//     connection.query(sql, (err, periodTimings)=>{
-//         if(err) throw(err);
-//         res.render("admin/timing.ejs", {periodTimings});
-//     });
-//     //res.render("admin/timing.ejs", {periodTimings});
-// });
-
-// router.post("/timing", authMiddleware("admin"), (req, res)=>{
-//     let {period1, period2, break1, period3, period4, break2, period5, period6} = req.body;
-//     periodTimings = [
-//         period1, period2, break1, period3, period4, break2, period5, period6
-//     ];
-//     res.redirect("/admin/timing");
-// });
 
 // GET route to fetch and render timings
 router.get("/timing", authMiddleware("admin"), (req, res) => {
@@ -575,257 +956,539 @@ router.post("/timing", authMiddleware("admin"), (req, res) => {
         });
 });
 
+
+
+// const generateTimetable = async () => {
+//   const { subjects, teachers, rooms, batches } = await fetchInputData();
+//   const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+//   const normalPeriodsPerDay = 6;
+//   const extendedPeriodsPerDay = 7;
+
+//   if (rooms.length === 0) {
+//     console.error("No rooms available! Please check your database.");
+//     return;
+//   }
+
+//   let classSchedules = {};
+//   let scheduleMeta = {};
+//   let teacherAvailability = {};
+//   let roomAvailability = {};
+
+//   // Initialize availability for 6 periods per day
+//   days.forEach(day => {
+//     teacherAvailability[day] = {};
+//     roomAvailability[day] = {};
+//     for (let period = 0; period < normalPeriodsPerDay; period++) {
+//       teacherAvailability[day][period] = new Set();
+//       roomAvailability[day][period] = new Set();
+//     }
+//   });
+
+//     // Initialize scheduleMeta for all classes (and batches if applicable)
+//     subjects.forEach(subject => {
+//     const key = subject.batch_id 
+//         ? `class-${subject.class_id}-batch-${subject.batch_id}` 
+//         : `class-${subject.class_id}`;
+
+//     if (!classSchedules[key]) {
+//         classSchedules[key] = Array.from({ length: 5 }, () => 
+//         Array(normalPeriodsPerDay).fill(null)
+//         );
+//     }
+
+//     if (!scheduleMeta[key]) {
+//         scheduleMeta[key] = {
+//         class_id: subject.class_id,
+//         batch_id: subject.batch_id || null
+//         };
+//     }
+//     });
+
+
+//   // Sort subjects: labs (duration=2) first, then by max_allocations descending
+//   subjects.sort((a, b) => b.duration - a.duration || b.max_allocations - a.max_allocations);
+
+//   // Helper shuffle function
+//   const shuffleArray = (array) => {
+//     for (let i = array.length - 1; i > 0; i--) {
+//       const j = Math.floor(Math.random() * (i + 1));
+//       [array[i], array[j]] = [array[j], array[i]];
+//     }
+//     return array;
+//   };
+
+//   let unallocatedSubjects = [];
+
+//   // === First allocation attempt: within 6 periods per day ===
+//   for (const subject of subjects) {
+//     const teacher = teachers.find(t => t.subject_id === subject.subject_id);
+//     if (!teacher) {
+//       console.error(`No teacher assigned for subject: ${subject.subject_name}. Skipping...`);
+//       continue;
+//     }
+
+//     let allocationsLeft = subject.max_allocations;
+//     const schedule = classSchedules[subject.class_id];
+//     const duration = subject.duration;
+
+//     // Collect candidate slots (periods 0 to 5)
+//     let candidateSlots = [];
+//     for (let dayIndex = 0; dayIndex < 5; dayIndex++) {
+//       for (let periodIndex = 0; periodIndex <= normalPeriodsPerDay - duration; periodIndex++) {
+//         if (duration === 2 && periodIndex % 2 !== 0) continue; // labs only at even periods
+
+//         let slotFree = true;
+//         for (let i = 0; i < duration; i++) {
+//           if (schedule[dayIndex][periodIndex + i]) {
+//             slotFree = false;
+//             break;
+//           }
+//         }
+//         if (slotFree) candidateSlots.push({ dayIndex, periodIndex });
+//       }
+//     }
+
+//     candidateSlots = shuffleArray(candidateSlots);
+
+//     while (allocationsLeft > 0 && candidateSlots.length > 0) {
+//       const { dayIndex, periodIndex } = candidateSlots.pop();
+//       const day = days[dayIndex];
+
+//       // Check teacher availability
+//       let teacherBusy = false;
+//       for (let i = 0; i < duration; i++) {
+//         if (teacherAvailability[day][periodIndex + i].has(teacher.teacher_id)) {
+//           teacherBusy = true;
+//           break;
+//         }
+//       }
+//       if (teacherBusy) continue;
+
+//       // Find available room for entire duration
+//       const availableRoom = rooms.find(room =>
+//         [...Array(duration).keys()].every(i => !roomAvailability[day][periodIndex + i].has(room.room_id))
+//       );
+//       if (!availableRoom) continue;
+
+//       // Ensure subject not scheduled twice in the same day
+//       if (schedule[dayIndex].some(slot => slot && slot.subject_id === subject.subject_id)) continue;
+
+//       // Allocate slots
+//       for (let i = 0; i < duration; i++) {
+//         schedule[dayIndex][periodIndex + i] = {
+//           subject_id: subject.subject_id,
+//           subject_name: subject.subject_name,
+//           teacher_id: teacher.teacher_id,
+//           teacher_name: teacher.teacher_name,
+//           room_id: availableRoom.room_id,
+//           room_name: availableRoom.room_name,
+//           batch_id: subject.batch_id || null
+//         };
+//         teacherAvailability[day][periodIndex + i].add(teacher.teacher_id);
+//         roomAvailability[day][periodIndex + i].add(availableRoom.room_id);
+//       }
+//       allocationsLeft--;
+//     }
+
+//     if (allocationsLeft > 0) {
+//       unallocatedSubjects.push({ subject, remaining: allocationsLeft });
+//     }
+//   }
+
+//   // === Extend schedules and availability to 7 periods (add 7th period) ===
+//   Object.keys(classSchedules).forEach(classId => {
+//     for (let dayIndex = 0; dayIndex < 5; dayIndex++) {
+//       if (classSchedules[classId][dayIndex].length < extendedPeriodsPerDay) {
+//         classSchedules[classId][dayIndex].push(null);
+//       }
+//     }
+//   });
+
+//   days.forEach(day => {
+//     if (!teacherAvailability[day][6]) teacherAvailability[day][6] = new Set();
+//     if (!roomAvailability[day][6]) roomAvailability[day][6] = new Set();
+//   });
+
+//     // === Retry logic: allocate unallocated subjects only in 7th period ===
+//     for (const { subject, remaining } of unallocatedSubjects) {
+//         const key = subject.batch_id 
+//             ? `class-${subject.class_id}-batch-${subject.batch_id}` 
+//             : `class-${subject.class_id}`;
+
+//         const teacher = teachers.find(t => t.subject_id === subject.subject_id);
+//         if (!teacher) {
+//             console.error(`No teacher assigned for subject: ${subject.subject_name} during retry. Skipping...`);
+//             continue;
+//         }
+
+//         const schedule = classSchedules[key];
+//         if (!schedule) {
+//             console.error(`Schedule not found for key: ${key}. Skipping retry for subject ${subject.subject_name}`);
+//             continue;
+//         }
+
+//         const duration = subject.duration;
+//         if (duration === 2) {
+//             console.warn(`Cannot allocate lab '${subject.subject_name}' in 7th period due to duration.`);
+//             continue;
+//         }
+
+//         let allocationsLeft = remaining;
+//         while (allocationsLeft > 0) {
+//             let placed = false;
+//             for (let dayIndex = 0; dayIndex < 5 && !placed; dayIndex++) {
+//             const day = days[dayIndex];
+//             if (!schedule[dayIndex][6]) {
+//                 if (!teacherAvailability[day][6].has(teacher.teacher_id)) {
+//                 const availableRoom = rooms.find(room => !roomAvailability[day][6].has(room.room_id));
+//                 if (availableRoom) {
+//                     schedule[dayIndex][6] = {
+//                     subject_id: subject.subject_id,
+//                     subject_name: subject.subject_name,
+//                     teacher_id: teacher.teacher_id,
+//                     teacher_name: teacher.teacher_name,
+//                     room_id: availableRoom.room_id,
+//                     room_name: availableRoom.room_name,
+//                     batch_id: subject.batch_id || null
+//                     };
+//                     teacherAvailability[day][6].add(teacher.teacher_id);
+//                     roomAvailability[day][6].add(availableRoom.room_id);
+//                     allocationsLeft--;
+//                     placed = true;
+//                     break;
+//                 }
+//                 }
+//             }
+//             }
+//             if (!placed) {
+//             console.error(`❌ Could not allocate subject '${subject.subject_name}' (ID: ${subject.subject_id}) for key '${key}' in 7th period.`);
+//             break;
+//             }
+//         }
+//     }
+
+//   await saveTimetableToDB(classSchedules, scheduleMeta);
+// };
+
 const fetchInputData = async () => {
     const getSubjects = 'SELECT * FROM subjects';
-    const getTeachers = `SELECT t.teacher_id, t.teacher_name, ts.subject_id FROM teachers t 
-                         JOIN teacher_subjects ts ON t.teacher_id = ts.teacher_id`;
+    const getTeachers = `
+        SELECT ts.subject_id, ts.teacher_id, t.teacher_name, ts.is_allotted
+        FROM teacher_subjects ts
+        JOIN teachers t ON t.teacher_id = ts.teacher_id
+    `;
     const getRooms = 'SELECT * FROM rooms';
+    const getBatches = 'SELECT * FROM batches';
 
     return new Promise((resolve, reject) => {
         connection.query(getSubjects, (err, subjects) => {
             if (err) return reject(err);
-            connection.query(getTeachers, (err, teachers) => {
+            connection.query(getTeachers, (err, teacherRows) => {
                 if (err) return reject(err);
                 connection.query(getRooms, (err, rooms) => {
                     if (err) return reject(err);
-                    resolve({ subjects, teachers, rooms });
+                    connection.query(getBatches, (err, batches) => {
+                        if (err) return reject(err);
+
+                        // Restructure teachers into subject->teacher list
+                        const teachersForSubject = {};
+                        teacherRows.forEach(r => {
+                            if (!teachersForSubject[r.subject_id]) {
+                                teachersForSubject[r.subject_id] = [];
+                            }
+                            teachersForSubject[r.subject_id].push({
+                                teacher_id: r.teacher_id,
+                                teacher_name: r.teacher_name,
+                                is_allotted: r.is_allotted === 1
+                            });
+                        });
+
+                        resolve({ subjects, teachersForSubject, rooms, batches });
+                    });
                 });
             });
         });
     });
 };
 
+function shuffleArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+}
 
-const generateTimetable = async () => {
-    const { subjects, teachers, rooms } = await fetchInputData();
+function isSlotAvailable(day, period, class_id, batch_id, teacher_id, room_id, timetable) {
+    // 1. Prevent same class/batch from double booking
+    if (timetable.some(e =>
+        e.day_of_week === day &&
+        e.period === period &&
+        e.class_id === class_id &&
+        (e.batch_id === batch_id || e.batch_id === null)
+    )) {
+        return false;
+    }
+
+    // 2. Prevent teacher conflict across all classes/batches
+    if (timetable.some(e =>
+        e.day_of_week === day &&
+        e.period === period &&
+        e.teacher_id === teacher_id
+    )) {
+        return false;
+    }
+
+    // 3. Prevent room conflict across all classes/batches
+    if (timetable.some(e =>
+        e.day_of_week === day &&
+        e.period === period &&
+        e.room_id === room_id
+    )) {
+        return false;
+    }
+
+    return true;
+}
+
+function generateTimetable({ subjects, teachersForSubject, rooms, batches }) {
     const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
     const periodsPerDay = 6;
+    const maxPeriods = 7;
+    const timetable = [];
+    const teacherAvailability = {};
+    const roomAvailability = {};
+    const unallocated = [];
 
-    if (rooms.length === 0) {
-        console.error("No rooms available! Please check your database.");
+    // Init availability
+    for (const day of days) {
+        teacherAvailability[day] = Array(maxPeriods).fill().map(() => new Set());
+        roomAvailability[day] = Array(maxPeriods).fill().map(() => new Set());
+    }
+
+    // Separate labs & lectures
+    let labs = subjects.filter(s => s.duration === 2);
+    let lectures = subjects.filter(s => s.duration === 1);
+
+    labs = shuffleArray(labs);
+    lectures = shuffleArray(lectures);
+
+    // Step 1: spread labs across week
+    let labDayIndex = 0;
+    for (const lab of labs) {
+        lab.preferredDay = days[labDayIndex % days.length];
+        labDayIndex++;
+    }
+
+    // Step 2: merge round robin
+    const orderedSubjects = [];
+    let dayIndex = 0;
+    for (const subj of [...labs, ...lectures]) {
+        subj.preferredDay = subj.preferredDay || days[dayIndex % days.length];
+        orderedSubjects.push(subj);
+        dayIndex++;
+    }
+
+    // Step 3: allocation function
+    const tryAllocate = (subj, allow7th = false) => {
+        let allocationsLeft = subj.remaining || subj.max_allocations;
+        const duration = subj.duration;
+        const subject_id = subj.subject_id;
+        const class_id = subj.class_id;
+        const batch_id = subj.batch_id || null;
+
+        const shuffledDays = subj.preferredDay
+            ? [subj.preferredDay, ...shuffleArray(days.filter(d => d !== subj.preferredDay))]
+            : shuffleArray([...days]);
+
+        for (const day of shuffledDays) {
+            for (let p = 0; p < (allow7th ? maxPeriods : periodsPerDay) && allocationsLeft > 0; p++) {
+                // labs (duration=2) must start at even slot (0,2,4) and have room for 2
+                if (duration === 2 && (! [0, 2, 4].includes(p) || p + 1 >= maxPeriods)) continue;
+
+                // ✅ Check exclusivity
+                let canPlace = true;
+                for (let i = 0; i < duration; i++) {
+                    if (!batch_id) {
+                        // Lecture → block whole class (all batches)
+                        const conflict = timetable.find(t =>
+                            t.class_id === class_id &&
+                            t.day_of_week === day &&
+                            t.period === p + i
+                        );
+                        if (conflict) { canPlace = false; break; }
+                    } else {
+                        // Batch lab → only blocked by class-level lecture
+                        const lectureConflict = timetable.find(t =>
+                            t.class_id === class_id &&
+                            t.day_of_week === day &&
+                            t.period === p + i &&
+                            t.batch_id === null
+                        );
+                        if (lectureConflict) { canPlace = false; break; }
+                    }
+                }
+                if (!canPlace) continue;
+
+                // Avoid same subject twice in a day for same batch/class
+                const alreadyToday = timetable.find(t =>
+                    t.class_id === class_id &&
+                    (t.batch_id || null) === batch_id &&
+                    t.day_of_week === day &&
+                    t.subject_id === subject_id
+                );
+                if (alreadyToday) continue;
+
+                // Avoid consecutive duplicate lectures
+                const prevSlot = timetable.find(t =>
+                    t.class_id === class_id &&
+                    (t.batch_id || null) === batch_id &&
+                    t.day_of_week === day &&
+                    t.period === p - 1
+                );
+                if (prevSlot && prevSlot.subject_id === subject_id && duration === 1) continue;
+
+                // Pick teacher
+                const candidates = teachersForSubject[subject_id] || [];
+                const allotted = candidates.filter(t => t.is_allotted);
+                const alternates = shuffleArray(candidates.filter(t => !t.is_allotted));
+                const teacherChosen = allotted[0] || alternates[0];
+                if (!teacherChosen) continue;
+
+                // Pick room (labs require different rooms, lectures just one)
+                const availableRooms = shuffleArray([...rooms]).filter(r =>
+                    !roomAvailability[day][p].has(r.room_id)
+                );
+                const roomChosen = availableRooms[0];
+                if (!roomChosen) continue;
+
+                if(!isSlotAvailable(day, p, class_id, batch_id, teacherChosen.teacher_id, roomChosen.room_id, timetable)){
+                    continue;
+                }
+
+                // Before allocation, check for existing allocation with same class+batch+day+period
+                const duplicate = timetable.find(t =>
+                    t.class_id === class_id &&
+                    (t.batch_id || null) === (batch_id || null) &&
+                    t.day_of_week === day &&
+                    (t.period === p || (duration === 2 && [p, p+1].includes(t.period)))
+                );
+                if (duplicate) continue;
+
+                // ✅ Allocate
+                for (let i = 0; i < duration; i++) {
+                    timetable.push({
+                        class_id,
+                        batch_id,
+                        day_of_week: day,
+                        period: p + i,
+                        subject_id,
+                        subject_name: subj.subject_name,
+                        teacher_id: teacherChosen.teacher_id,
+                        teacher_name: teacherChosen.teacher_name,
+                        room_id: roomChosen.room_id,
+                        room_name: roomChosen.room_name
+                    });
+                    teacherAvailability[day][p + i].add(teacherChosen.teacher_id);
+                    roomAvailability[day][p + i].add(roomChosen.room_id);
+                }
+
+                allocationsLeft--;
+                subj.remaining = allocationsLeft;
+            }
+        }
+        return allocationsLeft;
+    };
+
+    // Step 4: first pass
+    for (const subj of orderedSubjects) {
+        subj.remaining = subj.max_allocations;
+        let remaining = tryAllocate(subj, false);
+        if (remaining > 0) {
+            subj.remaining = remaining;
+            unallocated.push(subj);
+        }
+    }
+
+    // Step 5: retry unallocated in 7th slot
+    const stillUnallocated = [];
+    for (const subj of unallocated) {
+        let remaining = tryAllocate(subj, true);
+        if (remaining > 0) {
+            subj.remaining = remaining;
+            stillUnallocated.push(subj);
+        }
+    }
+
+    return { timetable, unallocated: stillUnallocated };
+}
+
+const saveTimetableToDB = async (timetable) => {
+    if (!timetable || timetable.length === 0) {
+        console.log("⚠️ No timetable entries to save.");
         return;
     }
 
-    let classSchedules = {};  
-    let teacherAvailability = {};  
-    let roomAvailability = {};  
+    const values = timetable.map(entry => [
+        entry.class_id,
+        entry.day_of_week,
+        entry.period + 1, // +1 if you want periods 1–6 instead of 0–5
+        entry.subject_id,
+        entry.teacher_id,
+        entry.room_id,
+        entry.batch_id
+    ]);
 
-    // Initialize tracking for teacher and room availability
-    days.forEach(day => {
-        teacherAvailability[day] = {};  
-        roomAvailability[day] = {};  
-        for (let period = 0; period < periodsPerDay; period++) {
-            teacherAvailability[day][period] = new Set();  
-            roomAvailability[day][period] = new Set();  
-        }
-    });
-
-    // Initialize schedule structure for each class
-    subjects.forEach(subject => {
-        if (!classSchedules[subject.class_id]) {
-            classSchedules[subject.class_id] = Array.from({ length: 5 }, () => Array(6).fill(null));
-        }
-    });
-
-    // **Sort Subjects: Prioritize Labs First (duration = 2)**
-    subjects.sort((a, b) => b.duration - a.duration || b.max_allocations - a.max_allocations);
-
-    let unallocatedSubjects = [];
-
-    // **Allocate Subjects**
-    subjects.forEach(subject => {
-        let teacher = teachers.find(t => t.subject_id === subject.subject_id);
-        if (!teacher) {
-            console.error(`No teacher assigned for subject: ${subject.subject_name}. Skipping...`);
-            return;
-        }
-
-        let allocations = subject.max_allocations;
-        let schedule = classSchedules[subject.class_id];
-        let duration = subject.duration;
-        let availableSlots = [];
-
-        // **Collect only valid slots**
-        for (let dayIndex = 0; dayIndex < 5; dayIndex++) {
-            for (let periodIndex = 0; periodIndex < periodsPerDay; periodIndex++) {
-                if (duration === 1) {
-                    // For normal lectures, collect any free slot
-                    if (!schedule[dayIndex][periodIndex]) {
-                        availableSlots.push({ dayIndex, periodIndex });
-                    }
-                } else if (duration === 2 && periodIndex % 2 === 0 && periodIndex < 5) {
-                    // For labs (2 periods), collect only (0-1), (2-3), (4-5)
-                    if (!schedule[dayIndex][periodIndex] && !schedule[dayIndex][periodIndex + 1]) {
-                        availableSlots.push({ dayIndex, periodIndex });
-                    }
-                }
-            }
-        }
-
-        // **Shuffle available slots**
-        availableSlots.sort(() => Math.random() - 0.5);
-
-        // **Try allocating the subject**
-        let failedAttempts = 0;
-
-        while (allocations > 0 && availableSlots.length > 0) {
-            let { dayIndex, periodIndex } = availableSlots.pop();
-            let day = days[dayIndex];
-
-            // **Check if teacher is available for the entire duration**
-            let teacherUnavailable = false;
-            for (let i = 0; i < duration; i++) {
-                if (teacherAvailability[day][periodIndex + i].has(teacher.teacher_id)) {
-                    teacherUnavailable = true;
-                    break;
-                }
-            }
-            if (teacherUnavailable) {
-                failedAttempts++;
-                continue;
-            }
-
-            // **Find an available room**
-            let availableRooms = rooms.filter(r => {
-                for (let i = 0; i < duration; i++) {
-                    if (roomAvailability[day][periodIndex + i].has(r.room_id)) {
-                        return false;
-                    }
-                }
-                return true;
-            });
-
-            if (availableRooms.length === 0) {
-                failedAttempts++;
-                continue;
-            }
-
-            let room = availableRooms[Math.floor(Math.random() * availableRooms.length)];
-
-            // **Ensure no subject is scheduled twice in a day**
-            if (schedule[dayIndex].some(slot => slot && slot.subject_id === subject.subject_id)) {
-                failedAttempts++;
-                continue;
-            }
-
-            // **Assign the class schedule**
-            for (let i = 0; i < duration; i++) {
-                schedule[dayIndex][periodIndex + i] = {
-                    subject_id: subject.subject_id,
-                    subject_name: subject.subject_name,
-                    teacher_id: teacher.teacher_id,
-                    teacher_name: teacher.teacher_name,
-                    room_id: room.room_id,
-                    room_name: room.room_name
-                };
-
-                // **Mark teacher and room as occupied**
-                teacherAvailability[day][periodIndex + i].add(teacher.teacher_id);
-                roomAvailability[day][periodIndex + i].add(room.room_id);
-            }
-
-            allocations--;
-            failedAttempts = 0;
-        }
-
-        // **Retry for Unallocated Subjects**
-        if (allocations > 0) {
-            unallocatedSubjects.push({ subject, remaining: allocations });
-        }
-    });
-
-    // **Emergency Filling for Unallocated Subjects**
-    unallocatedSubjects.forEach(({ subject, remaining }) => {
-        console.warn(`Retrying allocation for ${subject.subject_name} (Missing: ${remaining} slots)`);
-
-        let teacher = teachers.find(t => t.subject_id === subject.subject_id);
-        let schedule = classSchedules[subject.class_id];
-
-        for (let dayIndex = 0; dayIndex < 5; dayIndex++) {
-            for (let periodIndex = 0; periodIndex < 6; periodIndex++) {
-                if (remaining === 0) break;
-
-                let day = days[dayIndex];
-
-                // Skip if already occupied
-                if (schedule[dayIndex][periodIndex]) continue;
-
-                // Check teacher availability
-                if (teacherAvailability[day][periodIndex].has(teacher.teacher_id)) continue;
-
-                // Find an available room
-                let availableRooms = rooms.filter(r => !roomAvailability[day][periodIndex].has(r.room_id));
-                if (availableRooms.length === 0) continue;
-                let room = availableRooms[Math.floor(Math.random() * availableRooms.length)];
-
-                // **Force Assign the class schedule**
-                schedule[dayIndex][periodIndex] = {
-                    subject_id: subject.subject_id,
-                    subject_name: subject.subject_name,
-                    teacher_id: teacher.teacher_id,
-                    teacher_name: teacher.teacher_name,
-                    room_id: room.room_id,
-                    room_name: room.room_name
-                };
-
-                // Mark teacher and room as occupied
-                teacherAvailability[day][periodIndex].add(teacher.teacher_id);
-                roomAvailability[day][periodIndex].add(room.room_id);
-
-                remaining--;
-            }
-        }
-
-        if (remaining > 0) {
-            console.error(`Unable to allocate ${subject.subject_name}: ${remaining} slots missing.`);
-        }
-    });
-
-    // **Save to Database**
-    await saveTimetableToDB(classSchedules);
-};
-
-const saveTimetableToDB = async (classSchedules) => {
-    const insertTimetable = 'INSERT INTO timetable (class_id, day_of_week, period, subject_id, teacher_id, room_id) VALUES ?';
-    let timetableData = [];
-
-    Object.keys(classSchedules).forEach(classId => {
-        classSchedules[classId].forEach((day, dayIndex) => {
-            day.forEach((period, periodIndex) => {
-                if (period) {
-                    timetableData.push([
-                        classId, ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"][dayIndex],
-                        periodIndex + 1, period.subject_id, period.teacher_id, period.room_id
-                    ]);
-                }
-            });
-        });
-    });
+    const query = `
+        INSERT INTO timetable (class_id, day_of_week, period, subject_id, teacher_id, room_id, batch_id)
+        VALUES ?
+    `;
 
     return new Promise((resolve, reject) => {
-        connection.query(insertTimetable, [timetableData], (err, result) => {
-            if (err) return reject(err);
-            console.log('Timetable generated and saved successfully!');
-            resolve(result);
+        connection.query(query, [values], (err, result) => {
+            if (err) {
+                console.error("❌ Failed to insert timetable:", err);
+                reject(err);
+            } else {
+                console.log(`✅ Timetable inserted successfully! Rows: ${result.affectedRows}`);
+                resolve(result);
+            }
         });
     });
 };
 
-router.get("/timetable", authMiddleware("admin"), (req, res)=>{
-    let q = `TRUNCATE TABLE timetable`;
-    try{
-        connection.query(q, (err, result) => {
-        if(err) throw err;
-            generateTimetable();
-            //res.render("generate.ejs");
-            res.redirect("/admin/timetable/view");
-        }); 
-    }catch{
-        console.log(err);
-        res.send("some error in database");
+
+router.get("/timetable", authMiddleware("admin"), async (req, res) => {
+    try {
+        // clear old timetable
+        await new Promise((resolve, reject) => {
+            connection.query("TRUNCATE TABLE timetable", (err) => {
+                if (err) return reject(err);
+                console.log("✅ Old timetable cleared");
+                resolve();
+            });
+        });
+
+        // fetch inputs
+        const inputData = await fetchInputData();
+
+        // generate timetable
+        const { timetable, unallocated } = generateTimetable(inputData);
+
+        // save to DB
+        await saveTimetableToDB(timetable);
+
+        if (unallocated.length > 0) {
+            console.warn("⚠️ Some subjects not allocated:", unallocated);
+        }
+
+        res.redirect("/admin/timetable/view");
+    } catch (err) {
+        console.error("❌ Error generating timetable:", err);
+        res.status(500).send("Error generating timetable");
     }
-    
 });
+
 
 function formatTime(time) {
     // Format from "13:00:00" → "1:00 PM"
@@ -838,19 +1501,22 @@ function formatTime(time) {
 
 router.get("/timetable/view", authMiddleware("admin"), (req, res) => {
     const query = `
-        SELECT t.class_id, c.class_name, 
-               t.day_of_week, t.period, 
-               t.subject_id, s.subject_name, 
-               t.teacher_id, te.teacher_name, 
-               t.room_id, r.room_name
+        SELECT 
+            t.class_id, c.class_name, 
+            t.day_of_week, t.period, 
+            t.subject_id, s.subject_name, 
+            t.teacher_id, te.teacher_name, 
+            t.room_id, r.room_name,
+            t.batch_id, b.batch_name
         FROM timetable t
         JOIN classes c ON t.class_id = c.class_id
         JOIN subjects s ON t.subject_id = s.subject_id
         JOIN teachers te ON t.teacher_id = te.teacher_id
         JOIN rooms r ON t.room_id = r.room_id
+        LEFT JOIN batches b ON t.batch_id = b.batch_id
         ORDER BY t.class_id, 
-                 FIELD(t.day_of_week, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'), 
-                 t.period;
+                FIELD(t.day_of_week, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'), 
+                t.period, t.batch_id;
     `;
 
     connection.query(query, (err, results) => {
@@ -858,31 +1524,47 @@ router.get("/timetable/view", authMiddleware("admin"), (req, res) => {
             console.error('Error fetching timetable:', err);
             return res.status(500).json({ error: 'Database error' });
         }
+        //console.log("Fetched timetable entries:", results);
+
         const timetableByClass = {};
         results.forEach(entry => {
-            if (!timetableByClass[entry.class_id]) {
-                timetableByClass[entry.class_id] = {
+            const key = entry.class_id;
+
+            if (!timetableByClass[key]) {
+                timetableByClass[key] = {
                     class_name: entry.class_name,
                     timetable: {}
                 };
             }
-            if (!timetableByClass[entry.class_id].timetable[entry.period]) {
-                timetableByClass[entry.class_id].timetable[entry.period] = {};
+
+            if (!timetableByClass[key].timetable[entry.period]) {
+                timetableByClass[key].timetable[entry.period] = {};
             }
-            timetableByClass[entry.class_id].timetable[entry.period][entry.day_of_week] = {
+
+            if (!timetableByClass[key].timetable[entry.period][entry.day_of_week]) {
+                timetableByClass[key].timetable[entry.period][entry.day_of_week] = [];
+            }
+
+            timetableByClass[key].timetable[entry.period][entry.day_of_week].push({
+                batch_name: entry.batch_name,
                 subject_name: entry.subject_name,
                 teacher_name: entry.teacher_name,
                 room_name: entry.room_name
-            };
+            });
         });
-        let sql = "SELECT * FROM period_timings ORDER BY id";
-        connection.query(sql, (err, periodTimings)=>{
-            if(err) throw(err);
-            res.render("admin/view_timetable.ejs", { timetableByClass, periodTimings, formatTime});
+
+        const sql = "SELECT * FROM period_timings ORDER BY id";
+        connection.query(sql, (err, periodTimings) => {
+            if (err) throw err;
+            res.render("admin/view_timetable.ejs", {
+                timetableByClass,
+                periodTimings,
+                formatTime
+            });
         });
-        
     });
 });
+
 
 router.post("/timetable/save", authMiddleware("admin"), (req, res) => {
     const timetableData = req.body;
@@ -912,11 +1594,6 @@ router.post("/timetable/save", authMiddleware("admin"), (req, res) => {
     });
 });
 
-router.get("/timetable/final", authMiddleware("admin"), (req, res) => {
-    generateTeacherTimetable();
-            res.redirect("/admin/timetable/saved");
-});
-
 // Fetch saved timetables
 router.get("/timetable/saved", authMiddleware("admin"), (req, res) => {
     const query = "SELECT * FROM saved_timetables ORDER BY created_at DESC";
@@ -940,15 +1617,17 @@ router.get("/timetable/saved", authMiddleware("admin"), (req, res) => {
             return {
                 id: row.id,
                 class_id: row.class_id,
-                timetable: parsedData.timetable || {},
+                timetable: parsedData.timetable ? parsedData.timetable : parsedData,
                 class_name: parsedData.class_name || "Unknown Class",
                 created_at: row.created_at
             };
+
         });
         let sql = "SELECT * FROM period_timings ORDER BY id";
         connection.query(sql, (err, periodTimings)=>{
             if(err) throw(err);
             //console.log(periodTimings);
+            //console.log(JSON.stringify(savedTimetables, null, 2));
             res.render("admin/saved_timetables.ejs", { savedTimetables, periodTimings, formatTime});
         });
         //console.log("savedTimetables", savedTimetables[0].timetable);
@@ -958,7 +1637,7 @@ router.get("/timetable/saved", authMiddleware("admin"), (req, res) => {
 
 router.post("/timetable/update", authMiddleware("admin"), (req, res) => {
     const { timetableId, formattedTimetable } = req.body;
-    console.log("formattedTimetable", formattedTimetable);
+    //console.log("formattedTimetable", formattedTimetable);
 
     if (!timetableId || !formattedTimetable || typeof formattedTimetable !== "object") {
         return res.status(400).json({ success: false, message: "Invalid data format" });
@@ -985,7 +1664,7 @@ router.post("/timetable/update", authMiddleware("admin"), (req, res) => {
             // If it's a string, parse it
             try {
                 timetableData = JSON.parse(timetableData);
-                console.log(" Parsed Timetable:", timetableData);
+                //console.log(" Parsed Timetable:", timetableData);
             } catch (parseError) {
                 console.error(" Error Parsing JSON from DB:", parseError);
                 return res.status(500).json({ success: false, message: "Error parsing timetable data" });
@@ -1047,12 +1726,12 @@ function formatDateToMySQL(dateString) {
 router.delete("/timetable/delete/:created_at", authMiddleware("admin"), async (req, res) => {
     try {
         const { created_at } = req.params;
-        console.log(created_at);
+        //console.log(created_at);
         if (!created_at) {
             return res.status(400).send("Created timestamp is required");
         }
         const formattedDate = formatDateToMySQL(created_at);
-        console.log("Formatted Date for SQL:", formattedDate);
+        //console.log("Formatted Date for SQL:", formattedDate);
 
         let q = `DELETE FROM saved_timetables WHERE created_at = ?`;
         connection.query(q, [formattedDate], (err, results)=>{
@@ -1109,187 +1788,227 @@ async function fetchSavedTimetable() {
 
 async function generateTeacherTimetable() {
     try {
-        const hasDuplicates = await checkDuplicateTimetables();
-        if (hasDuplicates) {
-            console.log(" Cannot generate teacher timetable due to duplicate class timetables.");
-            return {};
-        }
-
         const savedTimetables = await fetchSavedTimetable();
         if (!savedTimetables.length) {
-            console.warn(" No timetables found in the database.");
+            console.warn("⚠️ No timetables found in the database.");
             return {};
         }
 
-        //console.log("Raw timetable data:", savedTimetables);
-        let teacherTimetable = {}; // { teacher_name: { Monday: [ {class, room} ], ... } }
+        let teacherTimetable = {}; // { teacher_name: { Monday: [ {period, class, subject, room} ], ... } }
+        console.error("❌")
 
-        savedTimetables.forEach(({ class_id, timetable }) => {
+        savedTimetables.forEach(({ class_id, timetable, class_name }) => {
             let parsedTimetable;
-            
+
             if (typeof timetable === "string") {
                 try {
                     parsedTimetable = JSON.parse(timetable);
                 } catch (error) {
-                    console.error(` Invalid JSON in timetable for class ${class_id}:`, error);
+                    console.error(`❌ Invalid JSON in timetable for class ${class_id}:`, error);
                     return;
                 }
             } else {
-                parsedTimetable = timetable; // If it's already an object
+                parsedTimetable = timetable;
             }
 
             // FIX: Access the nested `timetable` key
-            if (!parsedTimetable.timetable) {
-                console.warn(` Skipping class ${class_id}: No timetable data found`);
+            const ttData = parsedTimetable.timetable || parsedTimetable;
+            
+            if (!ttData || Object.keys(ttData).length === 0) {
+                console.warn(`⚠️ Skipping class ${class_id}: No timetable data found`);
                 return;
             }
 
-            //console.log(` Processing timetable for class ${class_id}:`, parsedTimetable.timetable);
-
-            Object.entries(parsedTimetable.timetable).forEach(([period, days]) => {
-                Object.entries(days).forEach(([day, details]) => {
-                    const { subject_name, teacher_name, room_name } = details;
-
-                    if (teacher_name) {
-                        //const normalizedTeacher = teacher_name.toLowerCase();
-                        const normalizedTeacher = teacher_name;
-
-                        if (!teacherTimetable[normalizedTeacher]) {
-                            teacherTimetable[normalizedTeacher] = {
-                                Monday: [], Tuesday: [], Wednesday: [],
-                                Thursday: [], Friday: []
-                            };
-                        }
-
-                        teacherTimetable[normalizedTeacher][day].push({
-                            period, class: class_id, subject: subject_name, room: room_name
-                        });
+            // Process each period
+            Object.entries(ttData).forEach(([period, days]) => {
+                // Process each day
+                Object.entries(days).forEach(([day, entries]) => {
+                    // FIX: Handle array of entries (for batches or multiple subjects)
+                    if (!Array.isArray(entries)) {
+                        console.warn(`⚠️ Expected array for period ${period}, day ${day}, got:`, typeof entries);
+                        return;
                     }
+
+                    // Process each entry in the array
+                    entries.forEach(details => {
+                        const { subject_name, teacher_name, room_name, batch_name } = details;
+                        
+                        if (teacher_name) {
+                            const normalizedTeacher = teacher_name.trim();
+                            
+                            // Initialize teacher's timetable if not exists
+                            if (!teacherTimetable[normalizedTeacher]) {
+                                teacherTimetable[normalizedTeacher] = {
+                                    Monday: [], 
+                                    Tuesday: [], 
+                                    Wednesday: [],
+                                    Thursday: [], 
+                                    Friday: []
+                                };
+                            }
+
+                            // Add entry to teacher's schedule
+                            teacherTimetable[normalizedTeacher][day].push({
+                                period: period,
+                                class: class_name || class_id,
+                                subject: subject_name,
+                                room: room_name,
+                                batch: batch_name || null
+                            });
+                        }
+                    });
                 });
             });
         });
-        //console.log(" Final Generated Teacher Timetable:", teacherTimetable);
 
+        console.log("✅ Generated Teacher Timetable for", Object.keys(teacherTimetable).length, "teachers");
+        
         // Store the generated teacher timetable in the database
         await saveTeacherTimetableToDB(teacherTimetable);
+        
         return teacherTimetable;
-
     } catch (error) {
-        console.error(" Error generating teacher timetable:", error);
+        console.error("❌ Error generating teacher timetable:", error);
         return {};
     }
 }
 
 async function saveTeacherTimetableToDB(teacherTimetable) {
-    try {
-        connection.beginTransaction();
-
-        // Clear previous teacher timetables
-        connection.query("DELETE FROM teacher_timetables", (err, result) => {
+    return new Promise((resolve, reject) => {
+        connection.beginTransaction(async (err) => {
             if (err) {
-                console.error(" Error deleting old records:", err);
-                connection.rollback();
-                return;
+                console.error("❌ Error starting transaction:", err);
+                return reject(err);
             }
-        });
 
-        for (const [teacher_name, timetable] of Object.entries(teacherTimetable)) {
-            // Fetch teacher_id from teachers table
-            connection.query("SELECT teacher_id FROM teachers WHERE teacher_name = ?", [teacher_name], (err, rows) => {
-                if (err) {
-                    console.error(` Error fetching teacher ID for ${teacher_name}:`, err);
-                    connection.rollback();
-                    return;
+            try {
+                // Step 1: Clear previous teacher timetables
+                await new Promise((res, rej) => {
+                    connection.query("DELETE FROM teacher_timetables", (err, result) => {
+                        if (err) return rej(err);
+                        console.log("🗑️ Cleared old teacher timetables");
+                        res(result);
+                    });
+                });
+
+                // Step 2: Prepare all inserts
+                const insertPromises = [];
+
+                for (const [teacher_name, timetable] of Object.entries(teacherTimetable)) {
+                    const promise = new Promise((res, rej) => {
+                        // Fetch teacher_id from teachers table
+                        connection.query(
+                            "SELECT teacher_id FROM teachers WHERE teacher_name = ?",
+                            [teacher_name],
+                            (err, rows) => {
+                                if (err) return rej(err);
+                                
+                                if (rows.length === 0) {
+                                    console.warn(`⚠️ No teacher found for name: ${teacher_name}, skipping entry.`);
+                                    return res(null);
+                                }
+
+                                const teacher_id = rows[0].teacher_id;
+                                const timetableJSON = JSON.stringify(timetable);
+
+                                // Insert new timetable
+                                connection.query(
+                                    "INSERT INTO teacher_timetables (teacher_id, teacher_name, timetable) VALUES (?, ?, ?)",
+                                    [teacher_id, teacher_name, timetableJSON],
+                                    (err, result) => {
+                                        if (err) return rej(err);
+                                        console.log(`✅ Stored timetable for ${teacher_name} (ID: ${teacher_id})`);
+                                        res(result);
+                                    }
+                                );
+                            }
+                        );
+                    });
+
+                    insertPromises.push(promise);
                 }
 
-                if (rows.length === 0) {
-                    console.warn(` No teacher found for name: ${teacher_name}, skipping entry.`);
-                    return;
-                }
-                const teacher_id = rows[0].teacher_id
-                const timetableJSON = JSON.stringify(timetable);
+                // Wait for all inserts to complete
+                await Promise.all(insertPromises);
 
-                // Insert new timetable
-                connection.query(
-                    "INSERT INTO teacher_timetables (teacher_id, teacher_name, timetable) VALUES (?, ?, ?)",
-                    [teacher_id, teacher_name, timetableJSON],
-                    (err, result) => {
-                        if (err) {
-                            console.error(` Error inserting timetable for ${teacher_name}:`, err);
-                            connection.rollback();
-                            return;
-                        }
-                        // console.log(`Stored timetable for ${teacher_name} (ID: ${teacher_id})`);
+                // Step 3: Commit transaction
+                connection.commit((err) => {
+                    if (err) {
+                        console.error("❌ Error committing transaction:", err);
+                        return connection.rollback(() => {
+                            reject(err);
+                        });
                     }
-                );
-            });
-        }
+                    console.log("✅ Teacher timetables saved successfully!");
+                    resolve();
+                });
 
-        connection.commit((err) => {
-            if (err) {
-                console.error(" Error committing transaction:", err);
-                connection.rollback();
-                return;
+            } catch (error) {
+                console.error("❌ Error during transaction:", error);
+                connection.rollback(() => {
+                    reject(error);
+                });
             }
-            console.log("Teacher timetables saved successfully!");
         });
-
-    } catch (error) {
-        console.error(" Error saving teacher timetable to DB:", error);
-        connection.rollback();
-    }
+    });
 }
+
+router.get("/timetable/final", authMiddleware("admin"), async (req, res) => {
+    await generateTeacherTimetable();
+    res.redirect("/admin/timetable/saved");
+});
 
 router.get("/teacher-timetables", authMiddleware("admin"), (req, res) => {
     const query = "SELECT * FROM teacher_timetables ORDER BY teacher_id ASC";
-    
+
     connection.query(query, (err, results) => {
         if (err) {
-            console.error("Error fetching teacher timetables:", err);
+            console.error("❌ Error fetching teacher timetables:", err);
             return res.status(500).json({ error: "Database error" });
         }
-        
+
         const teacherTimetables = {};
-        
+
         results.forEach(row => {
             let parsedData = {};
-            
+
             try {
                 // Ensure we're parsing only if it's a string
-                const rawTimetable = typeof row.timetable === "string" 
-                    ? JSON.parse(row.timetable) 
+                const rawTimetable = typeof row.timetable === "string"
+                    ? JSON.parse(row.timetable)
                     : row.timetable;
-                
+
                 // Transform the data structure to match the template's expectations
-                parsedData = {}; // Reset to empty object for transformed data
-                
+                parsedData = {};
+
                 // Process each day's schedule
                 for (const day in rawTimetable) {
                     if (rawTimetable[day] && Array.isArray(rawTimetable[day])) {
                         // Process each period entry for this day
                         rawTimetable[day].forEach(entry => {
                             const periodNum = entry.period;
-                            
+
                             // Initialize period object if it doesn't exist
                             if (!parsedData[periodNum]) {
                                 parsedData[periodNum] = {};
                             }
-                            
+
                             // Add this day's entry to the appropriate period
                             parsedData[periodNum][day] = {
                                 subject_name: entry.subject,
                                 class_name: entry.class,
-                                room_name: entry.room
+                                room_name: entry.room,
+                                batch_name: entry.batch || null
                             };
                         });
                     }
                 }
-                
+
             } catch (error) {
-                console.error(`Error processing timetable for teacher ID ${row.teacher_id}:`, error);
+                console.error(`❌ Error processing timetable for teacher ID ${row.teacher_id}:`, error);
                 parsedData = {};
             }
-            
+
             teacherTimetables[row.teacher_id] = {
                 id: row.id,
                 teacher_id: row.teacher_id,
@@ -1297,13 +2016,16 @@ router.get("/teacher-timetables", authMiddleware("admin"), (req, res) => {
                 teacher_name: row.teacher_name,
             };
         });
+
         let sql = "SELECT * FROM period_timings ORDER BY id";
-        connection.query(sql, (err, periodTimings)=>{
-            if(err) throw(err);
-            console.log(teacherTimetables);
-            res.render("admin/admin-teacher-timetable.ejs", { teacherTimetables, periodTimings, formatTime});
+        connection.query(sql, (err, periodTimings) => {
+            if (err) throw (err);
+            res.render("admin/admin-teacher-timetable.ejs", { 
+                teacherTimetables, 
+                periodTimings, 
+                formatTime 
+            });
         });
-        //res.render("admin/admin-teacher-timetable.ejs", { teacherTimetables, periodTimings });
     });
 });
 

@@ -1,5 +1,34 @@
-
 <% layout("/layouts/boilerplate.ejs") %>
+
+<style>
+    .batch-specific {
+        background-color: #fff3cd;
+        padding: 10px;
+        border-radius: 5px;
+        margin-top: 10px;
+    }
+    .subject-group {
+        background-color: #f8f9fa;
+        padding: 10px;
+        margin-bottom: 10px;
+        border-left: 3px solid #0d6efd;
+    }
+    .class-header {
+        background-color: #e7f3ff;
+        font-weight: bold;
+        border-top: 2px solid #0d6efd;
+    }
+    .class-header td {
+        padding: 12px !important;
+    }
+    .class-separator {
+        height: 20px;
+        background-color: #f8f9fa;
+    }
+    .class-separator td {
+        border: none !important;
+    }
+</style>
 
 <body>
 <div class="dashboard-container">
@@ -13,7 +42,7 @@
 
         <!-- Add Subject Button (Opens Modal) -->
         <button class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#addSubjectModal">
-            <i class="bi bi-plus-circle"></i> &nbsp; Add New Subject
+            <i class="bi bi-plus-circle"></i> Add New Subject
         </button>
 
         <div class="table-container">
@@ -22,36 +51,107 @@
                     <tr>
                         <th>ID</th>
                         <th>Subject Name</th>            
+                        <th>Class</th>
+                        <th>Batch</th>
                         <th>Max Allocations</th>
-                        <th>Class Id</th>
                         <th>Duration</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <% subjects.forEach(sub => { %>
-                        <tr>              
-                            <td><%= sub.subject_id %></td>
-                            <td><%= sub.subject_name %></td>
-                            <td><%= sub.max_allocations %></td>
-                            <td><%= sub.class_id %></td>
-                            <td><%= sub.duration %></td>
-                            <td style="display: flex;">
-                                <!-- Edit Button -->
-                                <button class="btn btn-primary btn-sm me-2" data-bs-toggle="modal" data-bs-target="#editSubjectModal<%= sub.subject_id %>">
-                                    <i class="bi bi-pencil-square"></i> Edit
-                                </button>
-    
-                                <!-- Delete Form -->
-                                <form method="POST" action="/admin/subject/<%= sub.subject_id %>/delete?_method=DELETE" onsubmit="return confirm('Are you sure you want to delete this subject?');">
-                                    <button class="btn btn-danger btn-sm"><i class="bi bi-trash"></i> Delete</button>
-                                </form>
+                    <% 
+                    // Group subjects by class first, then by name
+                    let subjectsByClass = {};
+                    subjects.forEach(sub => {
+                        if (!subjectsByClass[sub.class_name]) {
+                            subjectsByClass[sub.class_name] = {};
+                        }
+                        let key = `${sub.subject_name}_${sub.class_id}`;
+                        if (!subjectsByClass[sub.class_name][key]) {
+                            subjectsByClass[sub.class_name][key] = [];
+                        }
+                        subjectsByClass[sub.class_name][key].push(sub);
+                    });
+
+                    // Iterate through each class
+                    Object.keys(subjectsByClass).forEach((className, classIndex) => {
+                        // Add class separator if not first class
+                        if (classIndex > 0) { %>
+                            <tr class="class-separator">
+                                <td colspan="7"></td>
+                            </tr>
+                        <% }
+                        
+                        // Add class header
+                        %>
+                        <tr class="class-header">
+                            <td colspan="7">
+                                <h5 class="mb-0"><i class="bi bi-building"></i> <%= className %></h5>
                             </td>
                         </tr>
-                    <% }); %>
+                        <%
+                        
+                        // Now iterate through subjects in this class
+                        Object.values(subjectsByClass[className]).forEach(group => {
+                            let firstSub = group[0];
+                            let hasBatches = group.some(s => s.batch_id !== null);
+                    %>
+                        <% if (hasBatches) { %>
+                            <!-- Show grouped view for batch subjects -->
+                            <tr>
+                                <td colspan="6" class="subject-group">
+                                    <strong><%= firstSub.subject_name %></strong> - <%= firstSub.class_name %>
+                                    (Max: <%= firstSub.max_allocations %>, Duration: <%= firstSub.duration %>)
+                                </td>
+                                <td style="display: flex;">
+                                    <button class="btn btn-primary btn-sm float-end me-2" data-bs-toggle="modal" data-bs-target="#editSubjectGroupModal_<%= firstSub.subject_id %>">
+                                        <i class="bi bi-pencil-square"></i> Edit
+                                    </button>
+                                    <form method="POST" action="/admin/subject/group/<%= firstSub.subject_name %>/<%= firstSub.class_id %>/delete?_method=DELETE" 
+                                          class="d-inline float-end me-2"
+                                          onsubmit="return confirm('Delete this subject for all batches?');">
+                                        <button class="btn btn-danger btn-sm"><i class="bi bi-trash"></i> Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            <% group.forEach(sub => { %>
+                                <tr>
+                                    <td><%= sub.subject_id %></td>
+                                    <td style="padding-left: 30px;">└ <%= sub.subject_name %></td>
+                                    <td><%= sub.class_name %></td>
+                                    <td><span class="badge bg-info"><%= sub.batch_name || 'No Batch' %></span></td>
+                                    <td><%= sub.max_allocations %></td>
+                                    <td><%= sub.duration %></td>
+                                    <td>-</td>
+                                </tr>
+                            <% }); %>
+                        <% } else { %>
+                            <!-- Show regular view for non-batch subjects -->
+                            <tr>
+                                <td><%= firstSub.subject_id %></td>
+                                <td><%= firstSub.subject_name %></td>
+                                <td><%= firstSub.class_name %></td>
+                                <td><span class="text-muted">-</span></td>
+                                <td><%= firstSub.max_allocations %></td>
+                                <td><%= firstSub.duration %></td>
+                                <td style="display: flex;">
+                                    <button class="btn btn-primary btn-sm me-2" data-bs-toggle="modal" data-bs-target="#editSubjectModal<%= firstSub.subject_id %>">
+                                        <i class="bi bi-pencil-square"></i> Edit
+                                    </button>
+                                    <form method="POST" action="/admin/subject/<%= firstSub.subject_id %>/delete?_method=DELETE" 
+                                          onsubmit="return confirm('Are you sure you want to delete this subject?');">
+                                        <button class="btn btn-danger btn-sm"><i class="bi bi-trash"></i> Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        <% } %>
+                    <% }); // End of subject group loop
+                    }); // End of class loop
+                    %>
                 </tbody>
             </table>
         </div>
+
         <!-- Add Subject Modal -->
         <div class="modal fade" id="addSubjectModal" tabindex="-1" aria-labelledby="addSubjectModalLabel" aria-hidden="true">
             <div class="modal-dialog">
@@ -65,57 +165,96 @@
                             <div class="mb-3">
                                 <label for="subject_name" class="form-label"><i class="bi bi-book"></i> Subject Name:</label>
                                 <input type="text" class="form-control" name="subject_name" id="subject_name" required>
-                                <label for="max_allocations" class="form-label"> <i class="bi bi-hash"></i> Max Allocations:</label>
-                                <input type="text" class="form-control" name="max_allocations" id="max_allocations" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="max_allocations" class="form-label"><i class="bi bi-hash"></i> Max Allocations:</label>
+                                <input type="number" class="form-control" name="max_allocations" id="max_allocations" required>
+                            </div>
+                            <div class="mb-3">
                                 <label class="form-label"><i class="bi bi-building"></i> Class:</label>
-                                <select class="form-control" name="class_id">
+                                <select class="form-control" name="class_id" id="class_id_select" onchange="loadBatchesForClass(this.value, 'add')" required>
                                     <option value="">-- Select Class --</option>
-                                    <% classes.forEach(function(classItem) { %>
-                                        <option value="<%= classItem.class_id %>"><%= classItem.class_name %></option>
+                                    <% classes.forEach(function(classItem) { 
+                                        const batchesJSON = JSON.stringify(classItem.batches || []).replace(/"/g, '&quot;');
+                                    %>
+                                        <option value="<%= classItem.class_id %>" data-batches='<%= batchesJSON %>'>
+                                            <%= classItem.class_name %>
+                                            <% if (classItem.batches && classItem.batches.length > 0) { %>
+                                                (Has <%= classItem.batches.length %> batches)
+                                            <% } %>
+                                        </option>
                                     <% }); %>
                                 </select>
+                            </div>
+                            <div class="mb-3">
                                 <label class="form-label"><i class="bi bi-hourglass-split"></i> Duration:</label>
-                                <select class="form-control" name="duration">
+                                <select class="form-control" name="duration" required>
                                     <option value="">-- Select Duration --</option>
-                                    <option value="1">1</option>
-                                    <option value="2">2</option>
+                                    <option value="1">1 Period</option>
+                                    <option value="2">2 Periods (Consecutive)</option>
                                 </select>
                             </div>
-                            <button type="submit" class="btn btn-success"><i class="bi bi-check-circle"></i> Save Subject</button>
+
+                            <div id="batch_option_add" style="display: none;">
+                                <div class="mb-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="is_batch_specific" name="is_batch_specific" onchange="toggleBatchPreview()">
+                                        <label class="form-check-label" for="is_batch_specific">
+                                            <strong>This subject is batch-specific</strong>
+                                        </label>
+                                    </div>
+                                    <small class="text-muted">Check this if the subject should be taught separately to each batch</small>
+                                </div>
+
+                                <div id="batch_info_add" class="batch-specific" style="display: none;">
+                                    <p class="mb-2"><i class="bi bi-info-circle"></i> This subject will be created for all batches:</p>
+                                    <div id="batch_list_add" class="mt-2"></div>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn btn-success mt-3"><i class="bi bi-check-circle"></i> Save Subject</button>
                         </form>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Edit Subject Modals (For Each Room) -->
-        <% subjects.forEach(sub => { %>
-        <div class="modal fade" id="editSubjectModal<%= sub.subject_id %>" tabindex="-1" aria-labelledby="editSubjectModalLabel<%= sub.subject_id %>" aria-hidden="true">
+        <!-- Edit Subject Modals (For non-batch subjects) -->
+        <% subjects.forEach(sub => { 
+            if (!sub.batch_id) { %>
+        <div class="modal fade" id="editSubjectModal<%= sub.subject_id %>" tabindex="-1">
             <div class="modal-dialog">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="editSubjectModalLabel<%= sub.subject_id %>">Edit Subject</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        <h5 class="modal-title">Edit Subject</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
                         <form action="/admin/subject/<%= sub.subject_id %>?_method=PATCH" method="POST">
                             <div class="mb-3">
-                                <label for="editSubjectName<%= sub.subject_id %>" class="form-label"><i class="bi bi-book"></i> Subject Name:</label>
-                                <input type="text" class="form-control" name="subject_name" id="editSubjectName<%= sub.subject_id %>" value="<%= sub.subject_name %>" required>
-                                <label for="editSubjectName<%=sub.subject_id %>" class="form-label"> <i class="bi bi-hash"></i> Max Allocations:</label>
-                                <input type="text" class="form-control" name="max_allocations" id="editSubjectName<%= sub.subject_id %>" value="<%= sub.max_allocations %>" required>
+                                <label class="form-label"><i class="bi bi-book"></i> Subject Name:</label>
+                                <input type="text" class="form-control" name="subject_name" value="<%= sub.subject_name %>" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label"><i class="bi bi-hash"></i> Max Allocations:</label>
+                                <input type="number" class="form-control" name="max_allocations" value="<%= sub.max_allocations %>" required>
+                            </div>
+                            <div class="mb-3">
                                 <label class="form-label"><i class="bi bi-building"></i> Class:</label>
-                                <select class="form-control" name="class_id">
+                                <select class="form-control" name="class_id" required>
                                     <option value="<%= sub.class_id %>"><%= sub.class_name %></option>
-                                    <% classes.forEach(function(classItem) { %>
+                                    <% classes.forEach(function(classItem) { 
+                                        if (classItem.class_id !== sub.class_id) { %>
                                         <option value="<%= classItem.class_id %>"><%= classItem.class_name %></option>
-                                    <% }); %>
+                                    <% }}); %>
                                 </select>
+                            </div>
+                            <div class="mb-3">
                                 <label class="form-label"><i class="bi bi-hourglass-split"></i> Duration:</label>
-                                <select class="form-control" name="duration">
-                                    <option value="<%= sub.duration %>"><%= sub.duration %></option>
-                                    <option value="1">1</option>
-                                    <option value="2">2</option>
+                                <select class="form-control" name="duration" required>
+                                    <option value="<%= sub.duration %>" selected><%= sub.duration %></option>
+                                    <option value="1">1 Period</option>
+                                    <option value="2">2 Periods</option>
                                 </select>
                             </div>
                             <button type="submit" class="btn btn-success"><i class="bi bi-check-circle"></i> Update Subject</button>
@@ -124,7 +263,121 @@
                 </div>
             </div>
         </div>
-        <% }); %>   
+        <% } %>
+        <% }); %>
+
+        <!-- Edit Group Modals (For batch subjects) -->
+        <% 
+        let processedGroups = new Set();
+        subjects.forEach(sub => { 
+            let groupKey = `${sub.subject_name}_${sub.class_id}`;
+            if (sub.batch_id && !processedGroups.has(groupKey)) {
+                processedGroups.add(groupKey);
+        %>
+        <div class="modal fade" id="editSubjectGroupModal_<%= sub.subject_id %>" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Edit Subject Group</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form action="/admin/subject/group/<%= sub.subject_name %>/<%= sub.class_id %>?_method=PATCH" method="POST">
+                            <div class="mb-3">
+                                <label class="form-label"><i class="bi bi-book"></i> Subject Name:</label>
+                                <input type="text" class="form-control" name="subject_name" value="<%= sub.subject_name %>" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label"><i class="bi bi-hash"></i> Max Allocations:</label>
+                                <input type="number" class="form-control" name="max_allocations" value="<%= sub.max_allocations %>" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label"><i class="bi bi-hourglass-split"></i> Duration:</label>
+                                <select class="form-control" name="duration" required>
+                                    <option value="<%= sub.duration %>" selected><%= sub.duration %></option>
+                                    <option value="1">1 Period</option>
+                                    <option value="2">2 Periods</option>
+                                </select>
+                            </div>
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle"></i> This will update the subject for all batches in <%= sub.class_name %>
+                            </div>
+                            <button type="submit" class="btn btn-success"><i class="bi bi-check-circle"></i> Update All</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <% }}); %>
     </div>
 </div>
+
+<script>
+    let currentClassBatches = [];
+
+    function loadBatchesForClass(classId, mode) {
+        console.log('Loading batches for class:', classId);
+        
+        const selectElement = document.getElementById('class_id_select');
+        const selectedOption = selectElement.options[selectElement.selectedIndex];
+        const batchOptionDiv = document.getElementById('batch_option_add');
+        const batchInfoDiv = document.getElementById('batch_info_add');
+        const batchCheckbox = document.getElementById('is_batch_specific');
+        
+        if (!classId) {
+            batchOptionDiv.style.display = 'none';
+            batchInfoDiv.style.display = 'none';
+            batchCheckbox.checked = false;
+            currentClassBatches = [];
+            return;
+        }
+        
+        const batchesAttr = selectedOption.getAttribute('data-batches');
+        console.log('data-batches attribute:', batchesAttr);
+        
+        try {
+            // Decode HTML entities (&quot; to ")
+            const decodedBatches = batchesAttr ? batchesAttr.replace(/&quot;/g, '"') : '[]';
+            console.log('Decoded batches:', decodedBatches);
+            
+            currentClassBatches = JSON.parse(decodedBatches);
+            console.log('Parsed batches:', currentClassBatches);
+        } catch (e) {
+            console.error('Error parsing batches:', e);
+            currentClassBatches = [];
+        }
+        
+        if (currentClassBatches.length > 0) {
+            // Show batch option checkbox
+            batchOptionDiv.style.display = 'block';
+            
+            // Update batch list
+            const batchListDiv = document.getElementById('batch_list_add');
+            batchListDiv.innerHTML = currentClassBatches.map(b => 
+                `<span class="badge bg-secondary me-1">${b.batch_name}</span>`
+            ).join('');
+            
+            console.log('Batch option div shown');
+        } else {
+            // No batches - hide everything
+            batchOptionDiv.style.display = 'none';
+            batchInfoDiv.style.display = 'none';
+            batchCheckbox.checked = false;
+            console.log('No batches found, hiding options');
+        }
+    }
+
+    function toggleBatchPreview() {
+        const batchCheckbox = document.getElementById('is_batch_specific');
+        const batchInfoDiv = document.getElementById('batch_info_add');
+        
+        console.log('Toggle batch preview, checked:', batchCheckbox.checked);
+        
+        if (batchCheckbox.checked && currentClassBatches.length > 0) {
+            batchInfoDiv.style.display = 'block';
+        } else {
+            batchInfoDiv.style.display = 'none';
+        }
+    }
+</script>
 </body>

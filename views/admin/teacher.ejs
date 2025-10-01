@@ -1,5 +1,20 @@
-
 <% layout("/layouts/boilerplate.ejs") %>
+
+<style>
+    .subject-badge {
+        display: inline-block;
+        margin: 2px;
+        padding: 5px 10px;
+        background-color: #e7f3ff;
+        /* border-left: 3px solid #0d6efd; */
+        border-radius: 3px;
+        font-size: 0.9em;
+    }
+    .batch-tag {
+        font-size: 0.85em;
+        color: #6c757d;
+    }
+</style>
 
 <body>
 <div class="dashboard-container">
@@ -9,11 +24,11 @@
     <!-- Main Content -->
     <div class="content">
         <h1>Teacher Management</h1>
-        <p>Manage all teachers here...</p>
+        <p>Manage all teachers and their assigned subjects here...</p>
 
         <!-- Add Teacher Button (Opens Modal) -->
         <button class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#addTeacherModal">
-            <i class="bi bi-plus-circle"></i> &nbsp; Add New Teacher
+            <i class="bi bi-plus-circle"></i> Add New Teacher-Subject Assignment
         </button>
 
         <div class="table-container">
@@ -22,7 +37,7 @@
                     <tr>
                         <th>ID</th>
                         <th>Teacher Name</th>            
-                        <th>Subject</th>
+                        <th>Assigned Subjects</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -31,7 +46,21 @@
                         <tr>              
                             <td><%= t.teacher_id %></td>
                             <td><%= t.teacher_name %></td>
-                            <td><%= t.subjects %></td>
+                            <td>
+                                <% if (t.subject_details && t.subject_details.length > 0) { %>
+                                    <% t.subject_details.forEach(sub => { %>
+                                        <div class="subject-badge">
+                                            <strong><%= sub.subject_name %></strong> 
+                                            - <%= sub.class_name %>
+                                            <% if (sub.batch_name) { %>
+                                                <span class="batch-tag">(Batch: <%= sub.batch_name %>)</span>
+                                            <% } %>
+                                        </div>
+                                    <% }); %>
+                                <% } else { %>
+                                    <span class="text-muted">No subjects assigned</span>
+                                <% } %>
+                            </td>
                             <td style="display: flex;">
                                 <!-- Edit Button -->
                                 <button class="btn btn-primary btn-sm me-2" data-bs-toggle="modal" data-bs-target="#editTeacherModal<%= t.teacher_id %>">
@@ -39,7 +68,7 @@
                                 </button>
     
                                 <!-- Delete Form -->
-                                <form method="POST" action="/admin/teacher/<%= t.teacher_id %>/delete?_method=DELETE" onsubmit="return confirm('Are you sure you want to delete this teacher?');">
+                                <form method="POST" action="/admin/teacher/<%= t.teacher_id %>/delete?_method=DELETE" onsubmit="return confirm('Are you sure you want to remove all subject assignments for this teacher?');">
                                     <button class="btn btn-danger btn-sm"><i class="bi bi-trash"></i> Delete</button>
                                 </form>
                             </td>
@@ -48,67 +77,124 @@
                 </tbody>
             </table>
         </div>
+
         <!-- Add Teacher Modal -->
         <div class="modal fade" id="addTeacherModal" tabindex="-1" aria-labelledby="addTeacherModalLabel" aria-hidden="true">
-            <div class="modal-dialog">
+            <div class="modal-dialog modal-lg">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="addSubjectTeacherModalLabel">Add New Teacher</h5>
+                        <h5 class="modal-title" id="addTeacherModalLabel">Add Teacher-Subject Assignment</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
                         <form action="/admin/teacher/new" method="POST">
                             <div class="mb-3">
                                 <label class="form-label"><i class="bi bi-person-badge"></i> Teacher:</label>
-                                <select class="form-control" name="teacher_name">
+                                <select class="form-control" name="teacher_name" required>
                                     <option value="">-- Select Teacher --</option>
                                     <% teacherInfo.forEach(function(teacher) { %>
                                         <option value="<%= teacher.teacher_name %>"><%= teacher.teacher_name %></option>
                                     <% }); %>
                                 </select>
-                                <label class="form-label"><i class="bi bi-book"></i> Subject:</label>
-                                <select class="form-control" name="subject_id">
-                                    <option value="">-- Select Subject --</option>
-                                    <% subjects.forEach(function(subject) { %>
-                                        <option value="<%= subject.subject_id %>"><%= subject.subject_name %> (Class: <%= subject.class_id %>)</option>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label"><i class="bi bi-book"></i> Subjects (Hold Ctrl/Cmd to select multiple):</label>
+                                <select class="form-control" name="subject_ids" multiple size="10" required style="height: 250px;">
+                                    <% 
+                                    // Group subjects by class for better organization
+                                    let subjectsByClass = {};
+                                    subjects.forEach(sub => {
+                                        if (!subjectsByClass[sub.class_name]) {
+                                            subjectsByClass[sub.class_name] = [];
+                                        }
+                                        subjectsByClass[sub.class_name].push(sub);
+                                    });
+                                    %>
+                                    <% Object.keys(subjectsByClass).forEach(className => { %>
+                                        <optgroup label="<%= className %>">
+                                            <% subjectsByClass[className].forEach(subject => { %>
+                                                <option value="<%= subject.subject_id %>">
+                                                    <%= subject.subject_name %>
+                                                    <% if (subject.batch_name) { %>
+                                                        - Batch: <%= subject.batch_name %>
+                                                    <% } %>
+                                                    (Duration: <%= subject.duration %>)
+                                                </option>
+                                            <% }); %>
+                                        </optgroup>
                                     <% }); %>
                                 </select>
+                                <small class="text-muted">Hold Ctrl (Windows) or Cmd (Mac) and click to select multiple subjects</small>
                             </div>
-                            <button type="submit" class="btn btn-success"><i class="bi bi-check-circle"></i> Save Teacher</button>
+
+                            <button type="submit" class="btn btn-success"><i class="bi bi-check-circle"></i> Save Assignment</button>
                         </form>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Edit Teacher Modals (For Each Room) -->
+        <!-- Edit Teacher Modals -->
         <% teachers.forEach(t => { %>
-        <div class="modal fade" id="editTeacherModal<%= t.teacher_id %>" tabindex="-1" aria-labelledby="editTeacherModalLabel<%= t.teacher_id %>" aria-hidden="true">
-            <div class="modal-dialog">
+        <div class="modal fade" id="editTeacherModal<%= t.teacher_id %>" tabindex="-1">
+            <div class="modal-dialog modal-lg">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="editTeacherModalLabel<%= t.teacher_id %>">Edit Teacher</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        <h5 class="modal-title">Edit Teacher: <%= t.teacher_name %></h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
-                        <form action="/admin/teacher/<%= t.teacher_id %>?_method=PATCH" method="POST">
+                        <h6>Current Assignments:</h6>
+                        <% if (t.subject_details && t.subject_details.length > 0) { %>
                             <div class="mb-3">
-                                <label class="form-label"><i class="bi bi-person-badge"></i> Teacher:</label>
-                                <select class="form-control" name="teacher_name">
-                                    <option value="<%= t.teacher_name %>"><%= t.teacher_name %></option>
-                                    <% teacherInfo.forEach(function(teacher) { %>
-                                        <option value="<%= teacher.teacher_name %>"><%= teacher.teacher_name %></option>
-                                    <% }); %>
-                                </select>
-                                <label class="form-label"><i class="bi bi-book"></i> Subject:</label>
-                                <select class="form-control" name="subject_id">
-                                    <option value="<%= t.teacher_id %>"><%= t.subject_name %></option>
-                                    <% subjects.forEach(function(subject) { %>
-                                        <option value="<%= subject.subject_id %>"><%= subject.subject_name %> (Class: <%= subject.class_id %>)</option>
+                                <% t.subject_details.forEach(sub => { %>
+                                    <div class="subject-badge">
+                                        <%= sub.subject_name %> - <%= sub.class_name %>
+                                        <% if (sub.batch_name) { %>
+                                            (Batch: <%= sub.batch_name %>)
+                                        <% } %>
+                                        <form method="POST" action="/admin/teacher/remove-subject/<%= t.teacher_id %>/<%= sub.subject_id %>?_method=DELETE" class="d-inline">
+                                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Remove this subject?')">
+                                                <i class="bi bi-x"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                <% }); %>
+                            </div>
+                        <% } %>
+
+                        <hr>
+
+                        <form action="/admin/teacher/<%= t.teacher_id %>/add-subject" method="POST">
+                            <div class="mb-3">
+                                <label class="form-label"><i class="bi bi-book"></i> Add New Subject:</label>
+                                <select class="form-control" name="subject_id" required>
+                                    <option value="">-- Select Subject --</option>
+                                    <% 
+                                    let subjectsByClass = {};
+                                    subjects.forEach(sub => {
+                                        if (!subjectsByClass[sub.class_name]) {
+                                            subjectsByClass[sub.class_name] = [];
+                                        }
+                                        subjectsByClass[sub.class_name].push(sub);
+                                    });
+                                    %>
+                                    <% Object.keys(subjectsByClass).forEach(className => { %>
+                                        <optgroup label="<%= className %>">
+                                            <% subjectsByClass[className].forEach(subject => { %>
+                                                <option value="<%= subject.subject_id %>">
+                                                    <%= subject.subject_name %>
+                                                    <% if (subject.batch_name) { %>
+                                                        - Batch: <%= subject.batch_name %>
+                                                    <% } %>
+                                                </option>
+                                            <% }); %>
+                                        </optgroup>
                                     <% }); %>
                                 </select>
                             </div>
-                            <button type="submit" class="btn btn-success"><i class="bi bi-check-circle"></i> Update Subject</button>
+                            <button type="submit" class="btn btn-success"><i class="bi bi-plus-circle"></i> Add Subject</button>
                         </form>
                     </div>
                 </div>

@@ -9,12 +9,21 @@
             <div class="navbar-nav">
                 <a class="navbar-brand" style="font-size: 23px;" href="/ctg">Timetable Generator</a>
             </div>
+
             <div class="navbar-nav">
-                <a class="nav-link active" aria-current="page" href="/ctg">Home</a>
-                <a class="nav-link" href="#">About</a>
+                <a class="nav-link" href="/ctg">Home</a>
                 <a class="nav-link" href="#features">Features</a>
                 <a class="nav-link" href="#">Contact</a>
                 <% if (user) { %>
+                    <% if (user.role === 'admin') { %>
+                        <a class="nav-link" href="/admin/dashboard">Dashboard</a>
+                        <a class="nav-link" href="/admin/timetable">Timetables</a>
+                    <% } else if (user.role === 'teacher') { %>
+                        <a class="nav-link" href="/teacher/timetable">My Timetable</a>
+                    <% } else if (user.role === 'student') { %>
+                        <a class="nav-link" href="/student/timetable">My Timetable</a>
+                    <% } %>
+
                     <form method="GET" action="/logout" class="mt-2">
                         <button type="submit" class="btn btn-info"><b>Logout</b></button>
                     </form>
@@ -23,10 +32,8 @@
                         <button type="submit" class="btn btn-info"><b>Login</b></button>
                     </form>
                 <% } %>
-                <!-- <form method="GET" action="/login" class="mt-2">
-                    <button type="submit" class="btn btn-info"><b>Login</b></button>
-                </form> -->
             </div>
         </div>
+
     </div>
   </nav>

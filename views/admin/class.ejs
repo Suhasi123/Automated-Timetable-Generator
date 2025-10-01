@@ -1,5 +1,23 @@
-
 <% layout("/layouts/boilerplate.ejs") %>
+
+<style>
+    .batch-inputs {
+        margin-top: 15px;
+        padding: 15px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        background-color: #f9f9f9;
+    }
+    .batch-item {
+        margin-bottom: 10px;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+    .batch-item input {
+        flex: 1;
+    }
+</style>
 
 <body>
 <div class="dashboard-container">
@@ -13,7 +31,7 @@
 
         <!-- Add Class Button (Opens Modal) -->
         <button class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#addClassModal">
-            <i class="bi bi-plus-circle"></i> &nbsp; Add New Class
+            <i class="bi bi-plus-circle"></i> Add New Class
         </button>
 
         <div class="table-container">
@@ -22,6 +40,7 @@
                     <tr>
                         <th>ID</th>
                         <th>Class Name</th>
+                        <th>Batches</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -30,6 +49,16 @@
                         <tr>
                             <td><%= cl.class_id %></td>
                             <td><%= cl.class_name %></td>
+                            <td>
+                                <% if (cl.batches && cl.batches.length > 0) { %>
+                                    <% cl.batches.forEach((batch, idx) => { %>
+                                        <span class="badge bg-info"><%= batch.batch_name %></span>
+                                        <% if (idx < cl.batches.length - 1) { %>, <% } %>
+                                    <% }); %>
+                                <% } else { %>
+                                    <span class="text-muted">No batches</span>
+                                <% } %>
+                            </td>
                             <td style="display: flex;">
                                 <!-- Edit Button -->
                                 <button class="btn btn-primary btn-sm me-2" data-bs-toggle="modal" data-bs-target="#editClassModal<%= cl.class_id %>">
@@ -37,7 +66,7 @@
                                 </button>
     
                                 <!-- Delete Form -->
-                                <form method="POST" action="/admin/class/<%= cl.class_id %>/delete?_method=DELETE" onsubmit="return confirm('Are you sure you want to delete this class?');">
+                                <form method="POST" action="/admin/class/<%= cl.class_id %>/delete?_method=DELETE" onsubmit="return confirm('Are you sure you want to delete this class and all its batches?');">
                                     <button class="btn btn-danger btn-sm"><i class="bi bi-trash"></i> Delete</button>
                                 </form>
                             </td>
@@ -46,6 +75,7 @@
                 </tbody>
             </table>
         </div>
+
         <!-- Add Class Modal -->
         <div class="modal fade" id="addClassModal" tabindex="-1" aria-labelledby="addClassModalLabel" aria-hidden="true">
             <div class="modal-dialog">
@@ -55,12 +85,37 @@
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
-                        <form action="/admin/class/new" method="POST">
+                        <form action="/admin/class/new" method="POST" id="addClassForm">
                             <div class="mb-3">
                                 <label for="className" class="form-label"><i class="bi bi-building"></i> Class Name:</label>
                                 <input type="text" class="form-control" name="class_name" id="className" required>
                             </div>
-                            <button type="submit" class="btn btn-success"><i class="bi bi-check-circle"></i> Save Class</button>
+
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="hasBatches" onchange="toggleBatchInputs('add')">
+                                    <label class="form-check-label" for="hasBatches">
+                                        This class has batches
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div id="batchInputsAdd" class="batch-inputs" style="display: none;">
+                                <label class="form-label"><i class="bi bi-people"></i> Batch Names:</label>
+                                <div id="batchListAdd">
+                                    <div class="batch-item">
+                                        <input type="text" class="form-control" name="batch_names[]" placeholder="Batch A">
+                                        <button type="button" class="btn btn-danger btn-sm" onclick="removeBatchInput(this)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn btn-secondary btn-sm mt-2" onclick="addBatchInput('add')">
+                                    <i class="bi bi-plus"></i> Add Another Batch
+                                </button>
+                            </div>
+
+                            <button type="submit" class="btn btn-success mt-3"><i class="bi bi-check-circle"></i> Save Class</button>
                         </form>
                     </div>
                 </div>
@@ -82,7 +137,47 @@
                                 <label for="editClassName<%= cl.class_id %>" class="form-label"><i class="bi bi-building"></i> Class Name:</label>
                                 <input type="text" class="form-control" name="class_name" id="editClassName<%= cl.class_id %>" value="<%= cl.class_name %>" required>
                             </div>
-                            <button type="submit" class="btn btn-success"><i class="bi bi-check-circle"></i> Update Class</button>
+
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="hasBatches<%= cl.class_id %>" 
+                                        <%= (cl.batches && cl.batches.length > 0) ? 'checked' : '' %>
+                                        onchange="toggleBatchInputs('<%= cl.class_id %>')">
+                                    <label class="form-check-label" for="hasBatches<%= cl.class_id %>">
+                                        This class has batches
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div id="batchInputs<%= cl.class_id %>" class="batch-inputs" 
+                                style="display: <%= (cl.batches && cl.batches.length > 0) ? 'block' : 'none' %>;">
+                                <label class="form-label"><i class="bi bi-people"></i> Batch Names:</label>
+                                <div id="batchList<%= cl.class_id %>">
+                                    <% if (cl.batches && cl.batches.length > 0) { %>
+                                        <% cl.batches.forEach(batch => { %>
+                                            <div class="batch-item">
+                                                <input type="hidden" name="batch_ids[]" value="<%= batch.batch_id %>">
+                                                <input type="text" class="form-control" name="batch_names[]" value="<%= batch.batch_name %>">
+                                                <button type="button" class="btn btn-danger btn-sm" onclick="removeBatchInput(this)">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                        <% }); %>
+                                    <% } else { %>
+                                        <div class="batch-item">
+                                            <input type="text" class="form-control" name="batch_names[]" placeholder="Batch A">
+                                            <button type="button" class="btn btn-danger btn-sm" onclick="removeBatchInput(this)">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    <% } %>
+                                </div>
+                                <button type="button" class="btn btn-secondary btn-sm mt-2" onclick="addBatchInput('<%= cl.class_id %>')">
+                                    <i class="bi bi-plus"></i> Add Another Batch
+                                </button>
+                            </div>
+
+                            <button type="submit" class="btn btn-success mt-3"><i class="bi bi-check-circle"></i> Update Class</button>
                         </form>
                     </div>
                 </div>
@@ -91,4 +186,43 @@
         <% }); %>   
     </div>
 </div>
+
+<script>
+    function toggleBatchInputs(id) {
+        const checkbox = document.getElementById('hasBatches' + (id === 'add' ? '' : id));
+        const batchInputs = document.getElementById('batchInputs' + (id === 'add' ? 'Add' : id));
+        batchInputs.style.display = checkbox.checked ? 'block' : 'none';
+        
+        // Disable batch inputs if unchecked
+        const inputs = batchInputs.querySelectorAll('input[name="batch_names[]"]');
+        inputs.forEach(input => {
+            input.disabled = !checkbox.checked;
+        });
+    }
+
+    function addBatchInput(id) {
+        const batchList = document.getElementById('batchList' + (id === 'add' ? 'Add' : id));
+        const newBatch = document.createElement('div');
+        newBatch.className = 'batch-item';
+        newBatch.innerHTML = `
+            <input type="text" class="form-control" name="batch_names[]" placeholder="Batch Name">
+            <button type="button" class="btn btn-danger btn-sm" onclick="removeBatchInput(this)">
+                <i class="bi bi-trash"></i>
+            </button>
+        `;
+        batchList.appendChild(newBatch);
+    }
+
+    function removeBatchInput(button) {
+        const batchItem = button.parentElement;
+        const batchList = batchItem.parentElement;
+        
+        // Only remove if there's more than one batch
+        if (batchList.children.length > 1) {
+            batchItem.remove();
+        } else {
+            alert('At least one batch is required if "This class has batches" is checked.');
+        }
+    }
+</script>
 </body>

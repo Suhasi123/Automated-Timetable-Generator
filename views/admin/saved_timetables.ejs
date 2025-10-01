@@ -13,23 +13,17 @@
 <% layout("/layouts/boilerplate.ejs") %>
 <style>
     .timetable-container {
-        overflow-x: auto; /* Prevents overflow */
+        overflow-x: auto;
         width: 100%;
     }
 
-    /* table {
-        max-width: 100%;
-        table-layout: fixed; 
-    } */
-
     .editable-cell {
-        width: 90%; /* Prevents inputs from expanding too much */
+        width: 90%;
         text-align: center;
         padding: 5px;
     }
     table {
         width: 85%;
-        /* max-width: 100%; */
         table-layout: fixed;
         border-collapse: collapse;
         text-align: center;
@@ -101,6 +95,13 @@
     .delete-btn:hover { background-color: darkred; }
     .edit-btn:hover { background-color: darkblue; }
     .download-btn:hover { background-color: darkgreen; }
+    .batch-entry {
+        margin: 5px 0;
+    }
+    .batch-entry hr {
+        margin: 5px 0;
+        border-top: 1px solid #ccc;
+    }
 </style>
 <body>
     <div class="dashboard-container">
@@ -127,7 +128,7 @@
         
                 <% groupedTimetables[createdAt].forEach(timetable => { %>
                     <div id="timetable_<%= timetable.id %>" class="timetable-container">
-                        <h3 style="text-align: center;"> <%= timetable.class_name %> Timetable</h3>
+                        <h3 style="text-align: center;"><%= timetable.class_name %> Timetable</h3>
                         <table>
                             <thead>
                                 <tr>
@@ -138,7 +139,7 @@
                                     <th>Thursday</th>
                                     <th>Friday</th>
                                 </tr>
-                            </thead>
+                            </thead> 
                             <tbody>
                                 <% let merged = {}; %>
                                 <% for (let pd = 0; pd < periodTimings.length; pd++) {
@@ -163,29 +164,46 @@
                                             let key = `${currentLecture}-${day}`;
                                             if (merged[key]) return;
 
-                                            let current = timetable.timetable[currentLecture]?.[day];
-                                            let next = (canMerge && nextLecture !== null)
-                                                ? timetable.timetable[nextLecture]?.[day]
-                                                : null;
+                                            const entries = timetable.timetable[currentLecture]?.[day];
+                                            const nextEntries = canMerge ? timetable.timetable[nextLecture]?.[day] : null;
 
-                                            let isDouble = canMerge && current && next &&
-                                                current.subject_name === next.subject_name &&
-                                                current.teacher_name === next.teacher_name &&
-                                                current.room_name === next.room_name;
+                                            let isDouble = false;
+                                            if (Array.isArray(entries) && Array.isArray(nextEntries)) {
+                                                isDouble = entries.length === nextEntries.length &&
+                                                    entries.every((e, i) =>
+                                                        nextEntries[i] &&
+                                                        e.subject_name === nextEntries[i].subject_name &&
+                                                        e.teacher_name === nextEntries[i].teacher_name &&
+                                                        e.room_name === nextEntries[i].room_name &&
+                                                        e.batch_name === nextEntries[i].batch_name
+                                                    );
+                                            }
                                         %>
                                             <% if (isDouble) { %>
                                                 <td rowspan="2">
-                                                    <%= current.subject_name %><br>
-                                                    <%= current.teacher_name %><br>
-                                                    <%= current.room_name %>
+                                                    <% entries.forEach((e, idx) => { %>
+                                                        <div class="batch-entry">
+                                                            <%= e.batch_name ? e.batch_name + ' - ' : '' %>
+                                                            <%= e.subject_name %><br>
+                                                            <%= e.teacher_name %><br>
+                                                            <%= e.room_name %>
+                                                        </div>
+                                                        <% if (idx !== entries.length - 1) { %><hr><% } %>
+                                                    <% }); %>
                                                 </td>
                                                 <% merged[`${nextLecture}-${day}`] = true; %>
                                             <% } else { %>
                                                 <td>
-                                                    <% if (current) { %>
-                                                        <%= current.subject_name %><br>
-                                                        <%= current.teacher_name %><br>
-                                                        <%= current.room_name %>
+                                                    <% if (entries && Array.isArray(entries) && entries.length > 0) { %>
+                                                        <% entries.forEach((e, idx) => { %>
+                                                            <div class="batch-entry">
+                                                                <%= e.batch_name ? e.batch_name + ' - ' : '' %>
+                                                                <%= e.subject_name %><br>
+                                                                <%= e.teacher_name %><br>
+                                                                <%= e.room_name %>
+                                                            </div>
+                                                            <% if (idx !== entries.length - 1) { %><hr><% } %>
+                                                        <% }); %>
                                                     <% } else { %>
                                                         -
                                                     <% } %>
@@ -205,8 +223,8 @@
                         </div>
                     </div>
 
-                    <div id="editableTimetable_<%= timetable.id %>" class="timetable-container" style="display: none;" data-class-name=<%= timetable.class_id %>>
-                        <h3 style="text-align: center;">Edit Class <%= timetable.class_id %> Timetable</h3>
+                    <div id="editableTimetable_<%= timetable.id %>" class="timetable-container" style="display: none;" data-class-name="<%= timetable.class_id %>">
+                        <h3 style="text-align: center;">Edit <%= timetable.class_name %> Timetable</h3>
                         <table>
                             <thead>
                                 <tr>
@@ -235,18 +253,42 @@
                                         <tr>
                                             <th><%= timeLabel %></th>
                                             <% ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].forEach(day => {
-                                                const cell = timetable.timetable?.[period]?.[day] || {};
+                                                const entries = timetable.timetable?.[period]?.[day];
                                             %>
                                                 <td>
-                                                    <input type="text" value="<%= cell.subject_name || '' %>" 
-                                                        data-day="<%= day %>" data-period="<%= period %>"
-                                                        class="editable-cell subject"><br>
-                                                    <input type="text" value="<%= cell.teacher_name || '' %>" 
-                                                        data-day="<%= day %>" data-period="<%= period %>"
-                                                        class="editable-cell teacher"><br>
-                                                    <input type="text" value="<%= cell.room_name || '' %>" 
-                                                        data-day="<%= day %>" data-period="<%= period %>"
-                                                        class="editable-cell room">
+                                                    <% if (entries && Array.isArray(entries)) { %>
+                                                        <% entries.forEach((cell, idx) => { %>
+                                                            <div class="batch-entry" style="margin-bottom: 10px;">
+                                                                <input type="text" value="<%= cell.batch_name || '' %>" 
+                                                                    data-day="<%= day %>" data-period="<%= period %>" data-index="<%= idx %>"
+                                                                    class="editable-cell batch" placeholder="Batch"><br>
+                                                                <input type="text" value="<%= cell.subject_name || '' %>" 
+                                                                    data-day="<%= day %>" data-period="<%= period %>" data-index="<%= idx %>"
+                                                                    class="editable-cell subject" placeholder="Subject"><br>
+                                                                <input type="text" value="<%= cell.teacher_name || '' %>" 
+                                                                    data-day="<%= day %>" data-period="<%= period %>" data-index="<%= idx %>"
+                                                                    class="editable-cell teacher" placeholder="Teacher"><br>
+                                                                <input type="text" value="<%= cell.room_name || '' %>" 
+                                                                    data-day="<%= day %>" data-period="<%= period %>" data-index="<%= idx %>"
+                                                                    class="editable-cell room" placeholder="Room">
+                                                            </div>
+                                                        <% }); %>
+                                                    <% } else { %>
+                                                        <div class="batch-entry">
+                                                            <input type="text" value="" 
+                                                                data-day="<%= day %>" data-period="<%= period %>" data-index="0"
+                                                                class="editable-cell batch" placeholder="Batch"><br>
+                                                            <input type="text" value="" 
+                                                                data-day="<%= day %>" data-period="<%= period %>" data-index="0"
+                                                                class="editable-cell subject" placeholder="Subject"><br>
+                                                            <input type="text" value="" 
+                                                                data-day="<%= day %>" data-period="<%= period %>" data-index="0"
+                                                                class="editable-cell teacher" placeholder="Teacher"><br>
+                                                            <input type="text" value="" 
+                                                                data-day="<%= day %>" data-period="<%= period %>" data-index="0"
+                                                                class="editable-cell room" placeholder="Room">
+                                                        </div>
+                                                    <% } %>
                                                 </td>
                                             <% }); %>
                                         </tr>
@@ -267,12 +309,12 @@
                 <div style="text-align: center;">
                 <form method="POST" action="/admin/timetable/delete/<%= createdAt %>?_method=DELETE">
                     <input type="hidden" name="created_at" value="<%= createdAt %>">
-                    <button class="btn btn-danger">Delete All Timetables </button>
+                    <button class="btn btn-danger">Delete All Timetables</button>
                 </form>
                 <br>
                 <form method="GET" action="/admin/timetable/final">
                     <input type="hidden" name="created_at" value="<%= createdAt %>">
-                    <button class="btn btn-primary">Finalize Timetables </button>
+                    <button class="btn btn-primary">Finalize Timetables</button>
                 </form>
                 </div>
             </div>
@@ -296,32 +338,41 @@
                     document.querySelectorAll(`#editableTimetable_${timetableId} .editable-cell`).forEach(input => {
                         let day = input.dataset.day ? input.dataset.day.trim() : null;
                         let period = input.dataset.period ? input.dataset.period.trim() : null;
+                        let index = input.dataset.index ? parseInt(input.dataset.index) : 0;
         
                         if (!day || !period) return;
         
+                        // Initialize structure with array
                         if (!updatedTimetable[period]) updatedTimetable[period] = {};
-                        if (!updatedTimetable[period][day]) updatedTimetable[period][day] = {};
+                        if (!updatedTimetable[period][day]) updatedTimetable[period][day] = [];
+                        if (!updatedTimetable[period][day][index]) updatedTimetable[period][day][index] = {};
         
-                        
-                        if (input.classList.contains("subject")) {
-                            updatedTimetable[period][day].subject_name = input.value.trim();
+                        // Store in array format
+                        if (input.classList.contains("batch")) {
+                            updatedTimetable[period][day][index].batch_name = input.value.trim() || null;
+                        } else if (input.classList.contains("subject")) {
+                            updatedTimetable[period][day][index].subject_name = input.value.trim();
                         } else if (input.classList.contains("teacher")) {
-                            updatedTimetable[period][day].teacher_name = input.value.trim();
+                            updatedTimetable[period][day][index].teacher_name = input.value.trim();
                         } else if (input.classList.contains("room")) {
-                            updatedTimetable[period][day].room_name = input.value.trim();
+                            updatedTimetable[period][day][index].room_name = input.value.trim();
                         }
                     });
         
-                    
+                    // Ensure all fields exist and remove empty entries
                     Object.keys(updatedTimetable).forEach(period => {
                         Object.keys(updatedTimetable[period]).forEach(day => {
-                            if (!updatedTimetable[period][day].subject_name) updatedTimetable[period][day].subject_name = "";
-                            if (!updatedTimetable[period][day].teacher_name) updatedTimetable[period][day].teacher_name = "";
-                            if (!updatedTimetable[period][day].room_name) updatedTimetable[period][day].room_name = "";
+                            updatedTimetable[period][day] = updatedTimetable[period][day].filter(entry => {
+                                if (!entry.subject_name) entry.subject_name = "";
+                                if (!entry.teacher_name) entry.teacher_name = "";
+                                if (!entry.room_name) entry.room_name = "";
+                                // Keep entry if at least one field has content
+                                return entry.subject_name || entry.teacher_name || entry.room_name;
+                            });
                         });
                     });
         
-                    let formattedTimetable = { timetable: updatedTimetable } ;
+                    let formattedTimetable = { timetable: updatedTimetable };
         
                     fetch('/admin/timetable/update', {
                         method: 'POST',
@@ -331,13 +382,13 @@
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
-                            alert(" Timetable updated successfully!");
+                            alert("Timetable updated successfully!");
                             location.reload();
                         } else {
-                            alert(" Error updating timetable.");
+                            alert("Error updating timetable.");
                         }
                     })
-                    .catch(error => console.error(" Fetch Error:", error));
+                    .catch(error => console.error("Fetch Error:", error));
                 }
         
                 function downloadPDF(classId) {
@@ -373,7 +424,7 @@
                             content: th.innerText.trim(),
                             styles: {
                                 halign: "center",
-                                fillColor: [100, 150, 255], // Header row color
+                                fillColor: [100, 150, 255],
                                 textColor: 255,
                                 fontStyle: "bold"
                             }
@@ -408,7 +459,7 @@
 
                                 // Style the first column (Period Timings)
                                 if (index === 0) {
-                                    cellData.styles.fillColor = [230, 230, 250]; // Light lavender
+                                    cellData.styles.fillColor = [230, 230, 250];
                                     cellData.styles.fontStyle = "bold";
                                 }
 
@@ -438,10 +489,6 @@
                             cellPadding: 4,
                             valign: "middle",
                             halign: "center"
-                        },
-                        // No alternate row coloring
-                        didParseCell: function (data) {
-                            // No-op: we manually style first column & header already
                         }
                     });
 

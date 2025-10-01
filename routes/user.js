@@ -68,7 +68,7 @@ router.post("/login", (req, res) => {
         // Store user in session
         req.session.user = { id: user.id, username: user.username, role: user.role, class_id: user.class_id };
         console.log(` ${user.role} logged in:`, user.username);
-
+ 
         if (user.role === "admin") return res.redirect("/admin/dashboard");
         if (user.role === "teacher") return res.redirect("/teacher/dashboard");
         if (user.role === "student") return res.redirect("/student/dashboard");
