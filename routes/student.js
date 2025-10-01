@@ -28,17 +28,6 @@ function authMiddleware(role) {
         next();
     };
 }
- 
-// let periodTimings = [
-//     "8:15 AM - 9:15 AM",
-//     "9:15 AM - 10:15 AM",
-//     "10:15 AM - 10:30 AM (Break)", 
-//     "10:30 AM - 11:30 AM",
-//     "11:30 AM - 12:30 PM",
-//     "12:30 PM - 1:15 PM (Break)",
-//     "1:15 PM - 2:15 PM",
-//     "2:15 PM - 3:15 PM",
-// ];
 
 router.get("/dashboard", authMiddleware("student"), (req, res) => {
     const studentId = req.user.id;

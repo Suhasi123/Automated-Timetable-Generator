@@ -902,17 +902,6 @@ router.delete("/teacher/:teacher_id/delete", authMiddleware("admin"), (req, res)
     });
 });
 
-// let periodTimings = [
-//     "8:15 AM - 9:15 AM",
-//     "9:15 AM - 10:15 AM",
-//     "10:15 AM - 10:30 AM (Break)", 
-//     "10:30 AM - 11:30 AM",
-//     "11:30 AM - 12:30 PM",
-//     "12:30 PM - 1:15 PM (Break)",
-//     "1:15 PM - 2:15 PM",
-//     "2:15 PM - 3:15 PM",
-// ];
-
 // GET route to fetch and render timings
 router.get("/timing", authMiddleware("admin"), (req, res) => {
     const sql = "SELECT * FROM period_timings ORDER BY id";
@@ -922,7 +911,6 @@ router.get("/timing", authMiddleware("admin"), (req, res) => {
         res.render("admin/timing.ejs", { periodTimings });
     });
 });
-
 
 // POST route to update all period timings
 router.post("/timing", authMiddleware("admin"), (req, res) => {
@@ -955,220 +943,6 @@ router.post("/timing", authMiddleware("admin"), (req, res) => {
             res.send("Error updating timings");
         });
 });
-
-
-
-// const generateTimetable = async () => {
-//   const { subjects, teachers, rooms, batches } = await fetchInputData();
-//   const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
-//   const normalPeriodsPerDay = 6;
-//   const extendedPeriodsPerDay = 7;
-
-//   if (rooms.length === 0) {
-//     console.error("No rooms available! Please check your database.");
-//     return;
-//   }
-
-//   let classSchedules = {};
-//   let scheduleMeta = {};
-//   let teacherAvailability = {};
-//   let roomAvailability = {};
-
-//   // Initialize availability for 6 periods per day
-//   days.forEach(day => {
-//     teacherAvailability[day] = {};
-//     roomAvailability[day] = {};
-//     for (let period = 0; period < normalPeriodsPerDay; period++) {
-//       teacherAvailability[day][period] = new Set();
-//       roomAvailability[day][period] = new Set();
-//     }
-//   });
-
-//     // Initialize scheduleMeta for all classes (and batches if applicable)
-//     subjects.forEach(subject => {
-//     const key = subject.batch_id 
-//         ? `class-${subject.class_id}-batch-${subject.batch_id}` 
-//         : `class-${subject.class_id}`;
-
-//     if (!classSchedules[key]) {
-//         classSchedules[key] = Array.from({ length: 5 }, () => 
-//         Array(normalPeriodsPerDay).fill(null)
-//         );
-//     }
-
-//     if (!scheduleMeta[key]) {
-//         scheduleMeta[key] = {
-//         class_id: subject.class_id,
-//         batch_id: subject.batch_id || null
-//         };
-//     }
-//     });
-
-
-//   // Sort subjects: labs (duration=2) first, then by max_allocations descending
-//   subjects.sort((a, b) => b.duration - a.duration || b.max_allocations - a.max_allocations);
-
-//   // Helper shuffle function
-//   const shuffleArray = (array) => {
-//     for (let i = array.length - 1; i > 0; i--) {
-//       const j = Math.floor(Math.random() * (i + 1));
-//       [array[i], array[j]] = [array[j], array[i]];
-//     }
-//     return array;
-//   };
-
-//   let unallocatedSubjects = [];
-
-//   // === First allocation attempt: within 6 periods per day ===
-//   for (const subject of subjects) {
-//     const teacher = teachers.find(t => t.subject_id === subject.subject_id);
-//     if (!teacher) {
-//       console.error(`No teacher assigned for subject: ${subject.subject_name}. Skipping...`);
-//       continue;
-//     }
-
-//     let allocationsLeft = subject.max_allocations;
-//     const schedule = classSchedules[subject.class_id];
-//     const duration = subject.duration;
-
-//     // Collect candidate slots (periods 0 to 5)
-//     let candidateSlots = [];
-//     for (let dayIndex = 0; dayIndex < 5; dayIndex++) {
-//       for (let periodIndex = 0; periodIndex <= normalPeriodsPerDay - duration; periodIndex++) {
-//         if (duration === 2 && periodIndex % 2 !== 0) continue; // labs only at even periods
-
-//         let slotFree = true;
-//         for (let i = 0; i < duration; i++) {
-//           if (schedule[dayIndex][periodIndex + i]) {
-//             slotFree = false;
-//             break;
-//           }
-//         }
-//         if (slotFree) candidateSlots.push({ dayIndex, periodIndex });
-//       }
-//     }
-
-//     candidateSlots = shuffleArray(candidateSlots);
-
-//     while (allocationsLeft > 0 && candidateSlots.length > 0) {
-//       const { dayIndex, periodIndex } = candidateSlots.pop();
-//       const day = days[dayIndex];
-
-//       // Check teacher availability
-//       let teacherBusy = false;
-//       for (let i = 0; i < duration; i++) {
-//         if (teacherAvailability[day][periodIndex + i].has(teacher.teacher_id)) {
-//           teacherBusy = true;
-//           break;
-//         }
-//       }
-//       if (teacherBusy) continue;
-
-//       // Find available room for entire duration
-//       const availableRoom = rooms.find(room =>
-//         [...Array(duration).keys()].every(i => !roomAvailability[day][periodIndex + i].has(room.room_id))
-//       );
-//       if (!availableRoom) continue;
-
-//       // Ensure subject not scheduled twice in the same day
-//       if (schedule[dayIndex].some(slot => slot && slot.subject_id === subject.subject_id)) continue;
-
-//       // Allocate slots
-//       for (let i = 0; i < duration; i++) {
-//         schedule[dayIndex][periodIndex + i] = {
-//           subject_id: subject.subject_id,
-//           subject_name: subject.subject_name,
-//           teacher_id: teacher.teacher_id,
-//           teacher_name: teacher.teacher_name,
-//           room_id: availableRoom.room_id,
-//           room_name: availableRoom.room_name,
-//           batch_id: subject.batch_id || null
-//         };
-//         teacherAvailability[day][periodIndex + i].add(teacher.teacher_id);
-//         roomAvailability[day][periodIndex + i].add(availableRoom.room_id);
-//       }
-//       allocationsLeft--;
-//     }
-
-//     if (allocationsLeft > 0) {
-//       unallocatedSubjects.push({ subject, remaining: allocationsLeft });
-//     }
-//   }
-
-//   // === Extend schedules and availability to 7 periods (add 7th period) ===
-//   Object.keys(classSchedules).forEach(classId => {
-//     for (let dayIndex = 0; dayIndex < 5; dayIndex++) {
-//       if (classSchedules[classId][dayIndex].length < extendedPeriodsPerDay) {
-//         classSchedules[classId][dayIndex].push(null);
-//       }
-//     }
-//   });
-
-//   days.forEach(day => {
-//     if (!teacherAvailability[day][6]) teacherAvailability[day][6] = new Set();
-//     if (!roomAvailability[day][6]) roomAvailability[day][6] = new Set();
-//   });
-
-//     // === Retry logic: allocate unallocated subjects only in 7th period ===
-//     for (const { subject, remaining } of unallocatedSubjects) {
-//         const key = subject.batch_id 
-//             ? `class-${subject.class_id}-batch-${subject.batch_id}` 
-//             : `class-${subject.class_id}`;
-
-//         const teacher = teachers.find(t => t.subject_id === subject.subject_id);
-//         if (!teacher) {
-//             console.error(`No teacher assigned for subject: ${subject.subject_name} during retry. Skipping...`);
-//             continue;
-//         }
-
-//         const schedule = classSchedules[key];
-//         if (!schedule) {
-//             console.error(`Schedule not found for key: ${key}. Skipping retry for subject ${subject.subject_name}`);
-//             continue;
-//         }
-
-//         const duration = subject.duration;
-//         if (duration === 2) {
-//             console.warn(`Cannot allocate lab '${subject.subject_name}' in 7th period due to duration.`);
-//             continue;
-//         }
-
-//         let allocationsLeft = remaining;
-//         while (allocationsLeft > 0) {
-//             let placed = false;
-//             for (let dayIndex = 0; dayIndex < 5 && !placed; dayIndex++) {
-//             const day = days[dayIndex];
-//             if (!schedule[dayIndex][6]) {
-//                 if (!teacherAvailability[day][6].has(teacher.teacher_id)) {
-//                 const availableRoom = rooms.find(room => !roomAvailability[day][6].has(room.room_id));
-//                 if (availableRoom) {
-//                     schedule[dayIndex][6] = {
-//                     subject_id: subject.subject_id,
-//                     subject_name: subject.subject_name,
-//                     teacher_id: teacher.teacher_id,
-//                     teacher_name: teacher.teacher_name,
-//                     room_id: availableRoom.room_id,
-//                     room_name: availableRoom.room_name,
-//                     batch_id: subject.batch_id || null
-//                     };
-//                     teacherAvailability[day][6].add(teacher.teacher_id);
-//                     roomAvailability[day][6].add(availableRoom.room_id);
-//                     allocationsLeft--;
-//                     placed = true;
-//                     break;
-//                 }
-//                 }
-//             }
-//             }
-//             if (!placed) {
-//             console.error(`❌ Could not allocate subject '${subject.subject_name}' (ID: ${subject.subject_id}) for key '${key}' in 7th period.`);
-//             break;
-//             }
-//         }
-//     }
-
-//   await saveTimetableToDB(classSchedules, scheduleMeta);
-// };
 
 const fetchInputData = async () => {
     const getSubjects = 'SELECT * FROM subjects';
@@ -1457,7 +1231,6 @@ const saveTimetableToDB = async (timetable) => {
     });
 };
 
-
 router.get("/timetable", authMiddleware("admin"), async (req, res) => {
     try {
         // clear old timetable
@@ -1488,7 +1261,6 @@ router.get("/timetable", authMiddleware("admin"), async (req, res) => {
         res.status(500).send("Error generating timetable");
     }
 });
-
 
 function formatTime(time) {
     // Format from "13:00:00" → "1:00 PM"
@@ -1564,7 +1336,6 @@ router.get("/timetable/view", authMiddleware("admin"), (req, res) => {
         });
     });
 });
-
 
 router.post("/timetable/save", authMiddleware("admin"), (req, res) => {
     const timetableData = req.body;
@@ -1691,7 +1462,6 @@ router.post("/timetable/update", authMiddleware("admin"), (req, res) => {
         });
     });
 });
-
 
 // Function to clean up undefined values from timetable JSON
 function cleanTimetable(timetable) {
