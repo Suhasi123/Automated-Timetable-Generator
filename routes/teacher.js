@@ -4,9 +4,9 @@ const router = express.Router();
 const mysql = require("mysql2");
 const connection = mysql.createConnection({
     host : 'localhost',
-    user : 'root',
+    user : 'your_username',
     database : 'CTG_DB',
-    password : 'Suhasi@11'
+    password : 'your_password'
 });
 
 function authMiddleware(role) {
