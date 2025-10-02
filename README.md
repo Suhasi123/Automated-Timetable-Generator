@@ -112,7 +112,7 @@ npm install
 ```
 
 3. **Configure database connection**
-Create a `config.js` or update database credentials in `app.js`:
+Update database credentials in `app.js`:
 ```javascript
 const connection = mysql.createConnection({
     host: 'localhost',
@@ -123,13 +123,10 @@ const connection = mysql.createConnection({
 ```
 
 4. **Set up the database**
-```bash
-mysql -u root -p < database/schema.sql
-```
 
 5. **Start the server**
 ```bash
-npm start
+node app.js
 ```
 
 6. **Access the application**
@@ -268,5 +265,3 @@ INSERT INTO teachers (teacher_name) VALUES ('Prof. John Doe');
 - [ ] Cloud deployment with backup functionality
 - [ ] Modern UI with React/Next.js and Tailwind CSS
 - [ ] API endpoints for third-party integrations
-
-**Note**: This is an academic project designed for educational purposes. For production use, implement proper security measures, input validation, and error handling.
