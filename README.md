@@ -225,43 +225,15 @@ INSERT INTO teachers (teacher_name) VALUES ('Prof. John Doe');
 | **Teacher** | View personal timetable, download PDF |
 | **Student** | View class timetable, download PDF |
 
-## API Routes
-
-### Authentication
-- `POST /login` - User login
-- `POST /logout` - User logout
-
-### Admin Routes
-- `GET /admin/dashboard` - Admin dashboard
-- `GET /admin/class` - Manage classes
-- `POST /admin/class/new` - Add new class
-- `GET /admin/subject` - Manage subjects
-- `GET /admin/teacher` - Manage teachers
-- `GET /admin/timetable` - Generate timetable
-- `POST /admin/timetable/save` - Save generated timetable
-- `GET /admin/timetable/saved` - View saved timetables
-- `POST /admin/timetable/update` - Edit timetable
-- `GET /admin/timetable/final` - Finalize & generate teacher timetables
-
-### Teacher Routes
-- `GET /teacher/dashboard` - Teacher dashboard
-- `GET /teacher/timetable` - View personal timetable
-
-### Student Routes
-- `GET /student/dashboard` - Student dashboard
-- `GET /student/timetable` - View class timetable
+## 🎥 Demo Video
+▶️ [Watch Demo on Google Drive](https://drive.google.com/drive/folders/1vW3RSATQMFsqGU2E9UJpqAy5MamG9Q8N?usp=sharing)
 
 ## Future Enhancements
 
 - [ ] JWT-based authentication for enhanced security
 - [ ] Real-time notifications for timetable updates
-- [ ] Teacher workload analytics and reports
-- [ ] Automated email distribution of timetables
 - [ ] Mobile-responsive Progressive Web App (PWA)
-- [ ] Export to Excel/Google Sheets
-- [ ] Calendar integration (Google Calendar, Outlook)
 - [ ] Constraint customization interface
 - [ ] Multi-semester support
 - [ ] Cloud deployment with backup functionality
 - [ ] Modern UI with React/Next.js and Tailwind CSS
-- [ ] API endpoints for third-party integrations
