@@ -1,13 +1,12 @@
 <%
-    // Function to convert period ID to lecture index (excluding breaks)
-    function getLectureIndex(id) {
-    let lectureIndex = 1;
+function getLectureIndex(id) {
+    let lectureIndex = 0;
     for (let i = 0; i < periodTimings.length; i++) {
-        if (periodTimings[i].id === id) {
-            return lectureIndex;
-        }
         if (!periodTimings[i].is_break) {
             lectureIndex++;
+        }
+        if (periodTimings[i].id === id) {
+            return lectureIndex;
         }
     }
     return -1;
@@ -19,6 +18,7 @@
         width: 85%;
         text-align: center;
         margin: 20px auto;
+        border-collapse: collapse;
     }
     th, td {
         border: 1px solid black; 
@@ -39,6 +39,14 @@
     .center-button {
         text-align: center;
         margin-top: 20px;
+    }
+    .batch-entry {
+        margin: 5px 0;
+        padding: 5px;
+    }
+    .batch-entry hr {
+        margin: 5px 0;
+        border-top: 1px solid #ccc;
     }
 </style>
 <body> 
@@ -69,26 +77,19 @@
                     <tbody>
                         <% let merged = {}; %>
                         <% 
-                            // Loop through periodTimings which is now an array of objects 
-                            for (let pd = 0; pd < periodTimings.length; pd++) {
-                                let periodObj = periodTimings[pd];
-                                let label = `${formatTime(periodObj.start_time)} - ${formatTime(periodObj.end_time)}`;
-                                let isBreak = periodObj.is_break;
-
-                                // You will need a way to map periodObj.id to your timetable's period index
-                                // Assuming getLectureIndex is a helper function you have that does this mapping:
-                                let currentLecture = getLectureIndex(periodObj.id);
-
-                                // Next period data
-                                let nextPeriod = periodTimings[pd + 1];
-                                let nextLecture = nextPeriod ? getLectureIndex(nextPeriod.id) : null;
-
-                                let canMerge = nextPeriod && !nextPeriod.is_break;
+                        for (let pd = 0; pd < periodTimings.length; pd++) {
+                            let periodObj = periodTimings[pd];
+                            let label = `${formatTime(periodObj.start_time)} - ${formatTime(periodObj.end_time)}`;
+                            let isBreak = periodObj.is_break;
+                            let currentLecture = getLectureIndex(periodObj.id);
+                            let nextPeriod = periodTimings[pd + 1];
+                            let nextLecture = nextPeriod ? getLectureIndex(nextPeriod.id) : null;
+                            let canMerge = nextPeriod && !nextPeriod.is_break;
                         %>
 
                         <% if (isBreak) { %>
                             <tr>
-                                <th colspan="6" style="text-align: center; background-color: lightgray;">
+                                <th colspan="6" style="text-align: center; background-color: #e0e0e0;">
                                     <%= label %> (Break)
                                 </th>
                             </tr>
@@ -99,31 +100,54 @@
                                     let key = `${currentLecture}-${day}`;
                                     if (merged[key]) return;
 
-                                    // Access timetable data for this class (tid), period, and day
-                                    let current = classTimetables[cid].timetable[currentLecture]?.[day];
-                                    let next = (canMerge && nextLecture !== null)
-                                        ? classTimetables[cid].timetable[nextLecture]?.[day]
+                                    // Access entries as arrays
+                                    const entries = cl.timetable[currentLecture]?.[day];
+                                    const nextEntries = (canMerge && nextLecture !== null)
+                                        ? cl.timetable[nextLecture]?.[day]
                                         : null;
 
-                                    // Double period check: same subject, class, room
-                                    let isDoublePeriod = canMerge && current && next &&
-                                        current.subject_name === next.subject_name &&
-                                        current.teacher_name === next.teacher_name &&
-                                        current.room_name === next.room_name;
+                                    // Check if it's a double period
+                                    let isDoublePeriod = false;
+                                    if (Array.isArray(entries) && Array.isArray(nextEntries)) {
+                                        isDoublePeriod = entries.length === nextEntries.length &&
+                                            entries.every((e, i) =>
+                                                nextEntries[i] &&
+                                                e.subject_name === nextEntries[i].subject_name &&
+                                                e.teacher_name === nextEntries[i].teacher_name &&
+                                                e.room_name === nextEntries[i].room_name &&
+                                                e.batch_name === nextEntries[i].batch_name
+                                            );
+                                    }
                                 %>
                                     <% if (isDoublePeriod) { %>
                                         <td rowspan="2" style="vertical-align: middle;">
-                                            <b><%= current.subject_name %></b><br>
-                                            Teacher: <%= current.teacher_name %><br>
-                                            Room: <%= current.room_name %>
+                                            <% entries.forEach((e, idx) => { %>
+                                                <div class="batch-entry">
+                                                    <% if (e.batch_name) { %>
+                                                        <span style="color: #0066cc; font-weight: bold;"><%= e.batch_name %></span><br>
+                                                    <% } %>
+                                                    <b><%= e.subject_name %></b><br>
+                                                    Teacher: <%= e.teacher_name %><br>
+                                                    Room: <%= e.room_name %>
+                                                </div>
+                                                <% if (idx !== entries.length - 1) { %><hr><% } %>
+                                            <% }); %>
                                         </td>
                                         <% merged[`${nextLecture}-${day}`] = true; %>
                                     <% } else { %>
                                         <td>
-                                            <% if (current) { %>
-                                                <b><%= current.subject_name %></b><br>
-                                                Teacher: <%= current.teacher_name %><br>
-                                                Room: <%= current.room_name %>
+                                            <% if (entries && Array.isArray(entries) && entries.length > 0) { %>
+                                                <% entries.forEach((e, idx) => { %>
+                                                    <div class="batch-entry">
+                                                        <% if (e.batch_name) { %>
+                                                            <span style="color: #0066cc; font-weight: bold;"><%= e.batch_name %></span><br>
+                                                        <% } %>
+                                                        <b><%= e.subject_name %></b><br>
+                                                        Teacher: <%= e.teacher_name %><br>
+                                                        Room: <%= e.room_name %>
+                                                    </div>
+                                                    <% if (idx !== entries.length - 1) { %><hr><% } %>
+                                                <% }); %>
                                             <% } else { %>
                                                 -
                                             <% } %>
@@ -242,6 +266,5 @@
     }
     </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
-
-</body> 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+</body>
